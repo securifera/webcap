@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "pywitness"
+version = "0.1.0"
+description = ""
+authors = ["TheTechromancer"]
+license = "GPL-v3.0"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+httpx = "^0.28.0"
+websockets = "^14.1"
+
+[tool.poetry.scripts]
+pywitness = "pywitness.cli:main"
+
+[tool.ruff]
+line-length = 119
+lint.ignore = ["E402", "E721", "E741", "F401", "F403", "F405", "E713"]
+
+[tool.poetry.group.dev.dependencies]
+ruff = "^0.8.1"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
