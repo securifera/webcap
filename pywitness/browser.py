@@ -1,8 +1,9 @@
-import json
 import httpx
+import orjson
 import shutil
 import asyncio
 import websockets
+from contextlib import suppress
 from subprocess import Popen, PIPE
 
 from pywitness.tab import Tab
@@ -40,6 +41,15 @@ class Browser(PywitnessBase):
         await tab.create()
         return tab
 
+    async def screenshot(self, url, x=800, y=600):
+        try:
+            tab = await self.new_tab()
+            await tab.navigate(url)
+            return await tab.screenshot(x=x, y=y)
+        finally:
+            with suppress(Exception):
+                await tab.close()
+
     def _next_message_id(self):
         message_id = int(self._current_message_id)
         self._current_message_id += 1
@@ -50,12 +60,11 @@ class Browser(PywitnessBase):
         try:
             while self.websocket and not self._closed:
                 message = await self.websocket.recv()
-                response = json.loads(message)
+                response = orjson.loads(message)
                 self.log.info(f"GOT MESSAGE: {response}")
 
                 # Handle response to a specific request
                 if "id" in response:
-                    self.log.info(f"ID")
                     message_id = response["id"]
                     if message_id in self.pending_requests:
                         future = self.pending_requests[message_id]
@@ -67,7 +76,6 @@ class Browser(PywitnessBase):
 
                 # Handle events (messages without id)
                 elif "method" in response:
-                    self.log.info(f"NO ID")
                     method = response["method"]
                     session_id = response.get("sessionId", None)
                     if session_id:
@@ -104,7 +112,7 @@ class Browser(PywitnessBase):
 
     async def _send_request(self, request):
         self.log.info(f"SENDING REQUEST: {request}")
-        await self.websocket.send(json.dumps(request))
+        await self.websocket.send(orjson.dumps(request).decode("utf-8"))
 
     async def start(self):
         # start chrome process
@@ -113,8 +121,12 @@ class Browser(PywitnessBase):
                 [self.chrome_path, "--remote-debugging-port=9222", "--headless"], stdout=PIPE, stderr=PIPE
             )
 
-        # get chrome uri
+        # loop until we get the chrome uri
         while self.uri is None:
+            # if chrome process has exited, raise an exception
+            return_code = self.chrome_process.poll()
+            if return_code is not None and return_code != 0:
+                raise Exception(f"Chrome process exited with code {return_code}")
             try:
                 response = httpx.get("http://127.0.0.1:9222/json/version")
                 self.uri = response.json()["webSocketDebuggerUrl"]

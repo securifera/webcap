@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import json
+import orjson
 import asyncio
 import argparse
 
@@ -10,16 +10,21 @@ from pywitness.browser import Browser
 async def _main():
     parser = argparse.ArgumentParser()
     parser.add_argument("url", help="The URL to capture")
+    parser.add_argument("-d", "--debug", action="store_true", help="Enable debugging")
     options = parser.parse_args()
 
+    if options.debug:
+        import logging
+
+        root_logger = logging.getLogger("pywitness")
+        root_logger.setLevel(logging.DEBUG)
+
     browser = Browser()
-    await browser.start()
-    tab = await browser.new_tab()
-    await tab.navigate(options.url)
-    webscreenshot_b64 = await tab.screenshot()
-    print(json.dumps({"blob": webscreenshot_b64}))
+    webscreenshot_b64 = await browser.screenshot(options.url)
+    print(orjson.dumps({"blob": webscreenshot_b64}))
 
     import base64
+
     with open("screenshot.png", "wb") as f:
         f.write(base64.decodebytes(webscreenshot_b64.encode()))
 

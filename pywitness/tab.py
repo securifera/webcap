@@ -47,9 +47,9 @@ class Tab(PywitnessBase):
         await self.request("Page.navigate", url=url)
         await self._page_loaded_future
 
-    async def screenshot(self):
+    async def screenshot(self, x=800, y=600):
         # Capture the screenshot
-        response = await self.request("Page.captureScreenshot", format="png", quality=100)
+        response = await self.request("Page.captureScreenshot", format="png", quality=100, width=x, height=y)
         return response["data"]
 
     async def close(self):

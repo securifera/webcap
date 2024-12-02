@@ -10,6 +10,7 @@ readme = "README.md"
 python = "^3.9"
 httpx = "^0.28.0"
 websockets = "^14.1"
+orjson = "^3.10.12"
 
 [tool.poetry.scripts]
 pywitness = "pywitness.cli:main"
@@ -20,7 +21,15 @@ lint.ignore = ["E402", "E721", "E741", "F401", "F403", "F405", "E713"]
 
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.8.1"
+pytest-httpserver = "^1.1.0"
+pytest-asyncio = "^0.24.0"
+poetry-dynamic-versioning = "^1.4.1"
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning"]
+build-backend = "poetry_dynamic_versioning.backend"
+
+[tool.poetry-dynamic-versioning]
+enable = true
+metadata = true
+format = "v0.1.{distance}"

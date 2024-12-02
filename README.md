@@ -31,15 +31,11 @@ async def main():
     browser = Browser()
     # start the browser
     await browser.start()
-    # create a new tab
-    tab = await browser.new_tab()
-    # navigate to a URL
-    await tab.navigate("http://example.com")
     # take a screenshot
-    webscreenshot_b64 = await tab.screenshot()
+    encoded_screenshot = await browser.screenshot("http://example.com")
     # save the screenshot to a file
     with open("screenshot.png", "wb") as f:
-        f.write(base64.b64decode(webscreenshot_b64))
+        f.write(base64.b64decode(encoded_screenshot))
 
 if __name__ == "__main__":
     import asyncio
