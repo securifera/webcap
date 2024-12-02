@@ -1,30 +1,30 @@
+import os
+import re
 import httpx
 import orjson
 import shutil
 import asyncio
+import tempfile
 import websockets
+from pathlib import Path
 from contextlib import suppress
 from subprocess import Popen, PIPE
 
 from pywitness.tab import Tab
 from pywitness.base import PywitnessBase
-from pywitness.errors import DevToolsProtocolError
+from pywitness.errors import DevToolsProtocolError, PywitnessError
 
 
 class Browser(PywitnessBase):
-    chrome_paths = ["chromium", "chrome", "chrome-browser", "google-chrome", "brave-browser"]
+    chrome_paths = ["chromium", "chromium-browser", "chrome", "chrome-browser", "google-chrome", "brave-browser"]
 
     def __init__(self):
         super().__init__()
         self.chrome_path = None
         self.chrome_process = None
-        for i in self.chrome_paths:
-            chrome_path = shutil.which(i)
-            if chrome_path:
-                self.chrome_path = chrome_path
-                break
-        if not self.chrome_path:
-            raise Exception("Chrome executable not found")
+        self.chrome_version_regex = re.compile(r"[A-za-z][A-Za-z ]+([\d\.]+)")
+        self.temp_dir = Path(tempfile.gettempdir()) / ".pywitness"
+        self.temp_dir.mkdir(parents=True, exist_ok=True)
 
         self.uri = None
         self.websocket = None
@@ -111,22 +111,59 @@ class Browser(PywitnessBase):
         return request, future
 
     async def _send_request(self, request):
+        if self.websocket is None:
+            raise PywitnessError("You must call start() on the browser before making a request")
         self.log.info(f"SENDING REQUEST: {request}")
         await self.websocket.send(orjson.dumps(request).decode("utf-8"))
 
     async def start(self):
+        # enumerate chrome path
+        for i in self.chrome_paths:
+            chrome_path = shutil.which(i)
+            if chrome_path:
+                # run chrome_path --version
+                process = await asyncio.create_subprocess_exec(chrome_path, "--version", stdout=PIPE, stderr=PIPE)
+                stdout, stderr = await process.communicate()
+
+                if process.returncode != 0:
+                    self.log.error(f"Failed to get version for {chrome_path}: {stderr.decode().strip()}")
+                    continue
+
+                version_output = stdout.decode().strip()
+                match = self.chrome_version_regex.search(version_output)
+                if match:
+                    self.log.info(f"Found Chrome version {match.group(1)}")
+                    self.version = match.group(1)
+                    self.chrome_path = chrome_path
+                    break
+                else:
+                    self.log.error(f"Version output did not match expected format: {version_output}")
+
+        if not self.chrome_path:
+            raise Exception("Chrome executable not found")
+
         # start chrome process
         if self.chrome_process is None:
-            self.chrome_process = Popen(
-                [self.chrome_path, "--remote-debugging-port=9222", "--headless"], stdout=PIPE, stderr=PIPE
-            )
+            chrome_command = [
+                self.chrome_path,
+                "--remote-debugging-port=9222",
+                "--headless",
+                f"--user-data-dir={self.temp_dir}",
+            ]
+            if os.geteuid() == 0:
+                self.log.info("Running as root, adding --no-sandbox")
+                chrome_command += ["--no-sandbox"]
+            self.log.info(f"Running Chrome with command: {' '.join(chrome_command)}")
+            self.chrome_process = Popen(chrome_command, stdout=PIPE, stderr=PIPE)
 
         # loop until we get the chrome uri
         while self.uri is None:
             # if chrome process has exited, raise an exception
             return_code = self.chrome_process.poll()
             if return_code is not None and return_code != 0:
-                raise Exception(f"Chrome process exited with code {return_code}")
+                raise Exception(
+                    f"Chrome process exited with code {return_code}\n{self.chrome_process.stderr.read().decode()}"
+                )
             try:
                 response = httpx.get("http://127.0.0.1:9222/json/version")
                 self.uri = response.json()["webSocketDebuggerUrl"]

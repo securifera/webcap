@@ -20,6 +20,7 @@ async def _main():
         root_logger.setLevel(logging.DEBUG)
 
     browser = Browser()
+    await browser.start()
     webscreenshot_b64 = await browser.screenshot(options.url)
     print(orjson.dumps({"blob": webscreenshot_b64}))
 
