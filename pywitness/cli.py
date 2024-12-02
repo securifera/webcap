@@ -29,6 +29,8 @@ async def _main():
     with open("screenshot.png", "wb") as f:
         f.write(base64.decodebytes(webscreenshot_b64.encode()))
 
+    # clean up
+    await browser.stop()
 
 def main():
     asyncio.run(_main())

@@ -41,3 +41,4 @@ async def test_screenshot(httpserver):
 
     # clean up
     image_path.unlink()
+    await browser.stop()

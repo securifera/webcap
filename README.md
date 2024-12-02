@@ -36,6 +36,8 @@ async def main():
     # save the screenshot to a file
     with open("screenshot.png", "wb") as f:
         f.write(base64.b64decode(encoded_screenshot))
+    # stop the browser
+    await browser.stop()
 
 if __name__ == "__main__":
     import asyncio

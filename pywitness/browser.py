@@ -95,8 +95,6 @@ class Browser(PywitnessBase):
             self.log.error(f"Error in message handler: {e}")
         finally:
             self._closed = True
-            if self.websocket:
-                await self.websocket.close()
 
     async def request(self, method, **params):
         request, future = self._build_request(method, **params)
@@ -179,3 +177,10 @@ class Browser(PywitnessBase):
 
     async def receive_response(self):
         return await self.websocket.recv()
+
+    async def stop(self):
+        if self.websocket:
+            await self.websocket.close()
+        if self.chrome_process:
+            self.chrome_process.terminate()
+        self._closed = True
