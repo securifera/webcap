@@ -2,11 +2,11 @@
 
 <img src="https://github.com/user-attachments/assets/b1d2a3b7-8546-473a-9dd0-564696622cb3" width="400"/>
 
-Pywitness is an extremely lightweight web screenshot tool written in Python. It does not require selenium, playwright, or any other browser automation framework. All it needs is a working installation of Chrome.
+Pywitness is an extremely lightweight web screenshot tool written in Python. It does not require selenium, playwright, or any other browser automation framework. All it needs is a working Chrome installation.
 
 Features:
 
-- [ ] Blazing fast screenshots of unlimited URLs
+- [ ] Blazing fast screenshots
 - [ ] Full DOM extraction
 - [ ] Status code
 - [ ] Title extraction
