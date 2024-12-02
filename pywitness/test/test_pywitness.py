@@ -1,10 +1,13 @@
 import base64
 import pytest
+import logging
 import tempfile
 import extractous
 from pathlib import Path
 
 from pywitness import Browser
+
+logging.getLogger().setLevel(logging.DEBUG)
 
 temp_dir = Path(tempfile.gettempdir())
 
