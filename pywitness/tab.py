@@ -31,7 +31,7 @@ class Tab(PywitnessBase):
     async def request(self, method, **kwargs):
         if self.session_id is None:
             raise PywitnessError("You must call create() before making a request")
-        request, future = self.browser._build_request(method, **kwargs)
+        request, future = await self.browser._build_request(method, **kwargs)
         request["sessionId"] = self.session_id
         await self.browser._send_request(request)
         return await future
@@ -42,14 +42,22 @@ class Tab(PywitnessBase):
             self._page_loaded_future.set_result(None)
 
     async def navigate(self, url):
+        # set the resolution
+        x, y = self.browser.resolution
+        await self.request("Emulation.setDeviceMetricsOverride", width=x, height=y, deviceScaleFactor=1, mobile=False)
+
         # Navigate to the URL
         self._page_loaded_future = asyncio.Future()
         await self.request("Page.navigate", url=url)
         await self._page_loaded_future
 
-    async def screenshot(self, x=800, y=600):
+    async def screenshot(self):
         # Capture the screenshot
-        response = await self.request("Page.captureScreenshot", format="png", quality=100, width=x, height=y)
+        x, y = self.browser.resolution
+        kwargs = {"format": "png", "quality": 100, "width": x, "height": y}
+        if self.browser.full_page_capture:
+            kwargs["captureBeyondViewport"] = True
+        response = await self.request("Page.captureScreenshot", **kwargs)
         return response["data"]
 
     async def close(self):

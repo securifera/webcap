@@ -7,9 +7,24 @@ import argparse
 from pywitness.browser import Browser
 
 
+def resolution_type(value):
+    try:
+        width, height = map(int, value.split("x"))
+        if width <= 0 or height <= 0:
+            raise ValueError
+        return value
+    except ValueError:
+        raise argparse.ArgumentTypeError("Resolution must be in the format WxH, where W and H are positive integers.")
+
+
 async def _main():
     parser = argparse.ArgumentParser()
     parser.add_argument("url", help="The URL to capture")
+    parser.add_argument("-c", "--chrome", help="Path to Chrome executable")
+    parser.add_argument("-r", "--resolution", default="800x600", type=resolution_type, help="Resolution to capture")
+    parser.add_argument(
+        "-f", "--full-page", action="store_true", help="Capture the full page (larger resolution images)"
+    )
     parser.add_argument("-d", "--debug", action="store_true", help="Enable debugging")
     options = parser.parse_args()
 
@@ -19,7 +34,7 @@ async def _main():
         root_logger = logging.getLogger("pywitness")
         root_logger.setLevel(logging.DEBUG)
 
-    browser = Browser()
+    browser = Browser(options)
     await browser.start()
     webscreenshot_b64 = await browser.screenshot(options.url)
     print(orjson.dumps({"blob": webscreenshot_b64}))
@@ -31,6 +46,7 @@ async def _main():
 
     # clean up
     await browser.stop()
+
 
 def main():
     asyncio.run(_main())
