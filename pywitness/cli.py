@@ -21,11 +21,14 @@ async def _main():
     parser = argparse.ArgumentParser()
     parser.add_argument("url", help="The URL to capture")
     parser.add_argument("-c", "--chrome", help="Path to Chrome executable")
-    parser.add_argument("-r", "--resolution", default="800x600", type=resolution_type, help="Resolution to capture")
+    parser.add_argument("-r", "--resolution", default="1400x900", type=resolution_type, help="Resolution to capture")
+    parser.add_argument("-d", "--delay", type=float, default=3.0, help="Delay before capturing (default: 3.0 seconds)")
     parser.add_argument(
         "-f", "--full-page", action="store_true", help="Capture the full page (larger resolution images)"
     )
-    parser.add_argument("-d", "--debug", action="store_true", help="Enable debugging")
+    parser.add_argument("-u", "--user-agent", help="User agent to use")
+    parser.add_argument("-p", "--proxy", help="HTTP proxy to use")
+    parser.add_argument("--debug", action="store_true", help="Enable debugging")
     options = parser.parse_args()
 
     if options.debug:
@@ -37,7 +40,7 @@ async def _main():
     browser = Browser(options)
     await browser.start()
     webscreenshot_b64 = await browser.screenshot(options.url)
-    print(orjson.dumps({"blob": webscreenshot_b64}))
+    print(orjson.dumps({"blob": "webscreenshot_b64"}))
 
     import base64
 
