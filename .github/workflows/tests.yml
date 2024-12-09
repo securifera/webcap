@@ -43,7 +43,7 @@ jobs:
         run: |
           poetry run pytest -s -vv --disable-warnings --cov-report xml:cov.xml --cov=webcap .
       - name: Upload Code Coverage
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./cov.xml
