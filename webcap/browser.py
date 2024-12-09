@@ -11,12 +11,13 @@ from pathlib import Path
 from contextlib import suppress
 from subprocess import Popen, PIPE
 
-from pywitness.tab import Tab
-from pywitness.base import PywitnessBase
-from pywitness.errors import DevToolsProtocolError, PywitnessError
+from webcap.tab import Tab
+from webcap.helpers import task_pool
+from webcap.base import WebCapBase
+from webcap.errors import DevToolsProtocolError, WebCapError
 
 
-class Browser(PywitnessBase):
+class Browser(WebCapBase):
     chrome_paths = ["chromium", "chromium-browser", "chrome", "chrome-browser", "google-chrome", "brave-browser"]
 
     base_chrome_flags = [
@@ -40,7 +41,7 @@ class Browser(PywitnessBase):
         self.chrome_path = getattr(options, "chrome", None)
         self.chrome_process = None
         self.chrome_version_regex = re.compile(r"[A-za-z][A-Za-z ]+([\d\.]+)")
-        self.temp_dir = Path(tempfile.gettempdir()) / ".pywitness"
+        self.temp_dir = Path(tempfile.gettempdir()) / ".webcap"
         self.temp_dir.mkdir(parents=True, exist_ok=True)
         self.user_agent = getattr(
             options,
@@ -75,6 +76,10 @@ class Browser(PywitnessBase):
         self._current_message_id = 0
         self._message_id_lock = asyncio.Lock()
         self._message_handler_task = None
+
+    async def screenshot_urls(self, urls):
+        async for url, webscreenshot in task_pool(self.screenshot, urls):
+            yield url, webscreenshot
 
     async def new_tab(self):
         tab = Tab(self)
@@ -174,7 +179,7 @@ class Browser(PywitnessBase):
 
     async def _send_request(self, request):
         if self.websocket is None:
-            raise PywitnessError("You must call start() on the browser before making a request")
+            raise WebCapError("You must call start() on the browser before making a request")
         self.log.info(f"SENDING REQUEST: {request}")
         await self.websocket.send(orjson.dumps(request).decode("utf-8"))
 
@@ -210,7 +215,7 @@ class Browser(PywitnessBase):
             chrome_command = [
                 self.chrome_path,
             ] + self.chrome_flags
-            print(" ".join(chrome_command))
+            self.log.info(" ".join(chrome_command))
             self.chrome_process = Popen(chrome_command, stdout=PIPE, stderr=PIPE)
 
         # loop until we get the chrome uri
@@ -248,6 +253,7 @@ class Browser(PywitnessBase):
         # await self.request("Network.setRequestInterception", patterns=[{"urlPattern": "*"}])
 
     async def stop(self):
+        self.log.info("STOPPING BROWSER")
         if self.websocket:
             await self.websocket.close()
         if self.chrome_process:

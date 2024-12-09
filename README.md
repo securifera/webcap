@@ -1,15 +1,13 @@
-# Pywitness
+<img src="https://github.com/user-attachments/assets/16505254-121d-4e21-9e04-270f3a46fee4" width="600"/>
 
-<img src="https://github.com/user-attachments/assets/b1d2a3b7-8546-473a-9dd0-564696622cb3" width="400"/>
-
-Pywitness is an extremely lightweight web screenshot tool written in Python. It does not require selenium, playwright, or any other browser automation framework. All it needs is a working Chrome installation.
+**WebCap** is an extremely lightweight web screenshot tool written in Python. It does not require selenium, playwright, or any other browser automation framework. All it needs is a working Chrome installation.
 
 Features:
 
-- [ ] Blazing fast screenshots
-- [ ] Full DOM extraction
-- [ ] Status code
-- [ ] Title extraction
+- [x] Blazing fast screenshots
+- [x] Full DOM extraction
+- [x] Status code
+- [x] Title
 - [ ] Fuzzy hashing
 - [ ] Technology detection
 - [ ] Javascript extraction (environment dump)
@@ -17,14 +15,14 @@ Features:
 ## Example Usage - CLI
 
 ```bash
-pywitness http://example.com
+webcap http://example.com
 ```
 
 ## Example Usage - Python
 
 ```python
 import base64
-from pywitness import Browser
+from webcap import Browser
 
 async def main():
     # create a browser instance
@@ -32,10 +30,10 @@ async def main():
     # start the browser
     await browser.start()
     # take a screenshot
-    encoded_screenshot = await browser.screenshot("http://example.com")
+    webscreenshot = await browser.screenshot("http://example.com")
     # save the screenshot to a file
     with open("screenshot.png", "wb") as f:
-        f.write(base64.b64decode(encoded_screenshot))
+        f.write(webscreenshot.blob)
     # stop the browser
     await browser.stop()
 

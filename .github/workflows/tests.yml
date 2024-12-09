@@ -41,7 +41,7 @@ jobs:
           poetry install
       - name: Run tests
         run: |
-          poetry run pytest -s -vv --disable-warnings --cov-report xml:cov.xml --cov=pywitness .
+          poetry run pytest -s -vv --disable-warnings --cov-report xml:cov.xml --cov=webcap .
       # - name: Upload Code Coverage
       #   uses: codecov/codecov-action@v3
       #   with:

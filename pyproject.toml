@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "pywitness"
+name = "webcap"
 version = "0.1.0"
 description = ""
 authors = ["TheTechromancer"]
@@ -12,9 +12,10 @@ httpx = "^0.28.0"
 websockets = "^14.1"
 orjson = "^3.10.12"
 extractous = "^0.2.0"
+uvloop = "^0.21.0"
 
 [tool.poetry.scripts]
-pywitness = "pywitness.cli:main"
+webcap = "webcap.cli:main"
 
 [tool.ruff]
 line-length = 119
