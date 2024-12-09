@@ -10,7 +10,7 @@ import websockets
 from pathlib import Path
 from contextlib import suppress
 from subprocess import Popen, PIPE
-
+from concurrent.futures import ProcessPoolExecutor
 from webcap.tab import Tab
 from webcap.helpers import task_pool
 from webcap.base import WebCapBase
@@ -76,6 +76,8 @@ class Browser(WebCapBase):
         self._current_message_id = 0
         self._message_id_lock = asyncio.Lock()
         self._message_handler_task = None
+
+        self._process_pool = ProcessPoolExecutor()
 
     async def screenshot_urls(self, urls):
         async for url, webscreenshot in task_pool(self.screenshot, urls):

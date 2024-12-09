@@ -7,6 +7,8 @@ import logging
 import tempfile
 import extractous
 from pathlib import Path
+from lxml import html
+from lxml.etree import tostring
 
 from webcap import Browser
 from webcap.webscreenshot import WebScreenshot
@@ -22,15 +24,66 @@ def temp_dir():
     shutil.rmtree(tempdir)
 
 
-html_body = "<html><head><title>frankie</title></head><body>hello frank</body></html>"
+def normalize_html(html_content):
+    # Parse the HTML content
+    tree = html.fromstring(html_content)
+
+    # Normalize the tree by stripping whitespace and sorting attributes
+    for element in tree.iter():
+        if element.text:
+            element.text = element.text.strip()
+        if element.tail:
+            element.tail = element.tail.strip()
+
+        # Create a sorted list of attribute items
+        sorted_attrib = sorted(element.attrib.items())
+
+        # Clear existing attributes and set them in sorted order
+        element.attrib.clear()
+        for k, v in sorted_attrib:
+            element.attrib[k] = v.strip()
+
+    # Return the normalized HTML as a string
+    return tostring(tree, method="html", encoding="unicode")
+
+
+html_body = """
+<html>
+    <head>
+        <title>frankie</title>
+        <script>
+            // when the page loads, add a <p> element to the body
+            window.addEventListener("load", function() {
+                document.body.innerHTML += "<p>hello frank</p>";
+            });
+        </script>
+    </head>
+    <body></body>
+</html>
+"""
+rendered_html_body = """
+<html>
+    <head>
+        <title>frankie</title>
+        <script>
+            // when the page loads, add a <p> element to the body
+            window.addEventListener("load", function() {
+                document.body.innerHTML += "<p>hello frank</p>";
+            });
+        </script>
+    </head>
+    <body>
+        <p>hello frank</p>
+    </body>
+</html>
+"""
+parsed_rendered = normalize_html(rendered_html_body)
 
 
 @pytest.mark.asyncio
 async def test_screenshot(httpserver, temp_dir):
     # serve basic web page
-    httpserver.expect_request("/").respond_with_data(
-        html_body, headers={"Content-Type": "text/html"}
-    )
+    httpserver.expect_request("/").respond_with_data(html_body, headers={"Content-Type": "text/html"})
     url = httpserver.url_for("/")
 
     # create browser and take screenshot
@@ -120,10 +173,16 @@ async def test_cli(monkeypatch, httpserver, capsys, temp_dir):
     captured = capsys.readouterr()
     assert "hello frank" in captured.out
     json_out = json.loads(captured.out)
-    assert json_out["url"] == url
-    assert json_out["title"] == "frankie"
-    assert json_out["status_code"] == 200
-    assert json_out["dom"] == html_body
+    parsed_dom = normalize_html(json_out.pop("dom", ""))
+    assert parsed_dom == parsed_rendered
+    assert json_out == {
+        "url": url,
+        "final_url": url,
+        "title": "frankie",
+        "status_code": 200,
+        "navigation_history": [{"title": "frankie", "url": url}],
+        "perception_hash": "87070707070f1f7f",
+    }
 
     from webcap.helpers import sanitize_filename
 

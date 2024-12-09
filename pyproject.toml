@@ -13,6 +13,7 @@ websockets = "^14.1"
 orjson = "^3.10.12"
 extractous = "^0.2.0"
 uvloop = "^0.21.0"
+imagehash = "^4.3.1"
 
 [tool.poetry.scripts]
 webcap = "webcap.cli:main"
@@ -27,6 +28,7 @@ pytest-httpserver = "^1.1.0"
 pytest-asyncio = "^0.24.0"
 poetry-dynamic-versioning = "^1.4.1"
 pytest-cov = "^6.0.0"
+lxml = "^5.3.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning"]

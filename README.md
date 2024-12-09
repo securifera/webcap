@@ -1,6 +1,6 @@
 <img src="https://github.com/user-attachments/assets/16505254-121d-4e21-9e04-270f3a46fee4" width="600"/>
 
-**WebCap** is an extremely lightweight web screenshot tool written in Python. It does not require selenium, playwright, or any other browser automation framework. All it needs is a working Chrome installation.
+**WebCap** is an extremely lightweight web screenshot tool written in Python. It does not require selenium, playwright, or any other browser automation framework. It only needs a working Chrome installation.
 
 Features:
 
@@ -8,9 +8,12 @@ Features:
 - [x] Full DOM extraction
 - [x] Status code
 - [x] Title
-- [ ] Fuzzy hashing
+- [x] JSON output
+- [x] Fuzzy hashing
 - [ ] Technology detection
 - [ ] Javascript extraction (environment dump)
+- [ ] OCR text extraction
+- [ ] Full network logs
 
 ## Example Usage - CLI
 

@@ -1,4 +1,8 @@
+import io
 import base64
+import asyncio
+import imagehash
+from PIL import Image
 
 from webcap.base import WebCapBase
 from webcap.helpers import sanitize_filename
@@ -14,12 +18,23 @@ class WebScreenshot(WebCapBase):
         self.navigation_history = []
         self.dom = None
         self.status_code = 0
+        self._blob = None
+        self._perception_hash = None
 
     @property
     def blob(self):
-        if self.base64 is None:
-            raise ValueError("Screenshot not yet taken")
-        return base64.b64decode(self.base64)
+        if self._blob is None:
+            if self.base64 is None:
+                raise ValueError("Screenshot not yet taken")
+            self._blob = base64.b64decode(self.base64)
+        return self._blob
+
+    @staticmethod
+    def perception_hash(blob):
+        # make pillow image from blob
+        image = Image.open(io.BytesIO(blob))
+        image_hash = imagehash.phash(image)
+        return str(image_hash)
 
     @property
     def filename(self):
@@ -27,7 +42,9 @@ class WebScreenshot(WebCapBase):
             raise ValueError("URL not yet set")
         return sanitize_filename(self.url) + ".png"
 
-    def json(self, include_blob=False):
+    async def json(self, include_blob=False):
+        loop = asyncio.get_running_loop()
+        perception_hash = await loop.run_in_executor(self.tab.browser._process_pool, self.perception_hash, self.blob)
         j = {
             "url": self.url,
             "final_url": self.final_url,
@@ -35,6 +52,7 @@ class WebScreenshot(WebCapBase):
             "status_code": self.status_code,
             "navigation_history": self.navigation_history,
             "dom": self.dom,
+            "perception_hash": perception_hash,
         }
         if include_blob:
             j["base64_blob"] = self.base64

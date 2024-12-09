@@ -87,7 +87,8 @@ async def _main():
             f.write(webscreenshot.blob)
         # write json to stdout
         if options.json:
-            print(orjson.dumps(webscreenshot.json()).decode())
+            webscreenshot_json = await webscreenshot.json()
+            print(orjson.dumps(webscreenshot_json).decode())
         else:
             print(str(webscreenshot))
 
