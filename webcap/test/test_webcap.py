@@ -7,6 +7,8 @@ import logging
 import tempfile
 import extractous
 from pathlib import Path
+from werkzeug import Response
+
 from lxml import html
 from lxml.etree import tostring
 
@@ -22,6 +24,29 @@ def temp_dir():
     tempdir.mkdir(parents=True, exist_ok=True)
     yield tempdir
     shutil.rmtree(tempdir)
+
+
+@pytest.fixture
+def webcap_httpserver(make_httpserver):
+    httpserver = make_httpserver
+    httpserver.clear()
+
+    # httpserver custom response function that returns the headers + user agent
+    def custom_response(request):
+        body = ""
+        for header_name, header_value in request.headers.items():
+            header_name = header_name.lower()
+            if header_name.startswith("webcap-test") or header_name == "user-agent":
+                body += f"{header_name}: {header_value}\n"
+        response = Response(html_body.replace("[[body]]", f"<p>{body}</p>"))
+        response.headers.add("Content-Type", "text/html")
+        return response
+
+    # Set up the httpserver to use the custom response handler
+    httpserver.expect_request("/").respond_with_handler(custom_response)
+
+    # Return the configured httpserver
+    return httpserver
 
 
 def normalize_html(html_content):
@@ -43,8 +68,8 @@ def normalize_html(html_content):
         for k, v in sorted_attrib:
             element.attrib[k] = v.strip()
 
-    # Return the normalized HTML as a string
-    return tostring(tree, method="html", encoding="unicode")
+    # Return the normalized HTML as a string with pretty print
+    return tostring(tree, method="html", encoding="unicode")  # , pretty_print=True)
 
 
 html_body = """
@@ -58,7 +83,7 @@ html_body = """
             });
         </script>
     </head>
-    <body></body>
+    <body>[[body]]</body>
 </html>
 """
 rendered_html_body = """
@@ -73,6 +98,7 @@ rendered_html_body = """
         </script>
     </head>
     <body>
+        <p>user-agent: testagent</p>
         <p>hello frank</p>
     </body>
 </html>
@@ -81,13 +107,11 @@ parsed_rendered = normalize_html(rendered_html_body)
 
 
 @pytest.mark.asyncio
-async def test_screenshot(httpserver, temp_dir):
-    # serve basic web page
-    httpserver.expect_request("/").respond_with_data(html_body, headers={"Content-Type": "text/html"})
-    url = httpserver.url_for("/")
+async def test_screenshot(webcap_httpserver, temp_dir):
+    url = webcap_httpserver.url_for("/")
 
     # create browser and take screenshot
-    browser = Browser()
+    browser = Browser(user_agent="testagent")
     await browser.start()
     webscreenshot = await browser.screenshot(url)
 
@@ -101,8 +125,9 @@ async def test_screenshot(httpserver, temp_dir):
     # extract text from image
     extractor = extractous.Extractor()
     reader, metadata = extractor.extract_file(str(image_path))
-    frank = reader.read(99999)
-    assert "hello frank" in frank.decode()
+    frank = reader.read(99999).decode()
+    assert "hello frank" in frank
+    assert "user-agent: testagent" in frank
 
     # clean up
     image_path.unlink()
@@ -156,19 +181,14 @@ async def test_helpers(temp_dir):
 
 
 @pytest.mark.asyncio
-async def test_cli(monkeypatch, httpserver, capsys, temp_dir):
-    # serve basic web page
-    httpserver.expect_request("/").respond_with_data(
-        html_body,
-        headers={"Content-Type": "text/html"},
-    )
-    url = httpserver.url_for("/")
+async def test_cli(monkeypatch, webcap_httpserver, capsys, temp_dir):
+    url = webcap_httpserver.url_for("/")
 
     import sys
     import json
     from webcap.cli import _main
 
-    monkeypatch.setattr(sys, "argv", ["webcap", url, "--json", "--output", str(temp_dir)])
+    monkeypatch.setattr(sys, "argv", ["webcap", "-u", url, "-U", "testagent", "--json", "--output", str(temp_dir)])
     await _main()
     captured = capsys.readouterr()
     assert "hello frank" in captured.out
@@ -181,9 +201,10 @@ async def test_cli(monkeypatch, httpserver, capsys, temp_dir):
         "title": "frankie",
         "status_code": 200,
         "navigation_history": [{"title": "frankie", "url": url}],
-        "perception_hash": "87070707070f1f7f",
+        "perception_hash": "830303070f0f3fff",
     }
 
+    # sanitize_filename
     from webcap.helpers import sanitize_filename
 
     filename = sanitize_filename(url)
@@ -194,3 +215,15 @@ async def test_cli(monkeypatch, httpserver, capsys, temp_dir):
     reader, metadata = extractor.extract_file(str(screenshot_file))
     frank = reader.read(99999)
     assert "hello frank" in frank.decode()
+
+    # get_keyword_args
+    from webcap.helpers import get_keyword_args
+
+    assert get_keyword_args(Browser) == {
+        "chrome_path": None,
+        "resolution": "1440x900",
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "proxy": None,
+        "delay": 3.0,
+        "full_page_capture": False,
+    }

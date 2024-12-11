@@ -18,7 +18,7 @@ Features:
 ## Example Usage - CLI
 
 ```bash
-webcap http://example.com
+webcap -u http://example.com
 ```
 
 ## Example Usage - Python

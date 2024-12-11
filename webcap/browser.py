@@ -11,14 +11,16 @@ from pathlib import Path
 from contextlib import suppress
 from subprocess import Popen, PIPE
 from concurrent.futures import ProcessPoolExecutor
+
 from webcap.tab import Tab
-from webcap.helpers import task_pool
+from webcap import defaults
 from webcap.base import WebCapBase
 from webcap.errors import DevToolsProtocolError, WebCapError
+from webcap.helpers import task_pool, get_keyword_args  # , download_wap
 
 
 class Browser(WebCapBase):
-    chrome_paths = ["chromium", "chromium-browser", "chrome", "chrome-browser", "google-chrome", "brave-browser"]
+    possible_chrome_binaries = ["chromium", "chromium-browser", "chrome", "chrome-browser", "google-chrome"]
 
     base_chrome_flags = [
         "--disable-features=MediaRouter",
@@ -31,27 +33,35 @@ class Browser(WebCapBase):
         "--deny-permission-prompts",
         "--remote-debugging-port=9222",
         "--headless=new",
+        "--enable-automation",
+        # "--site-per-process",
         # web proxy
         # "--proxy-server=http://127.0.0.1:8081",
     ]
 
-    def __init__(self, options=None):
+    def __init__(
+        self,
+        chrome_path=None,
+        resolution=defaults.resolution,
+        user_agent=defaults.user_agent,
+        proxy=None,
+        delay=defaults.delay,
+        full_page_capture=False,
+    ):
         super().__init__()
         atexit.register(self.cleanup)
-        self.chrome_path = getattr(options, "chrome", None)
         self.chrome_process = None
+        self.chrome_path = chrome_path
         self.chrome_version_regex = re.compile(r"[A-za-z][A-Za-z ]+([\d\.]+)")
         self.temp_dir = Path(tempfile.gettempdir()) / ".webcap"
         self.temp_dir.mkdir(parents=True, exist_ok=True)
-        self.user_agent = getattr(
-            options,
-            "user_agent",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-        )
-        self.proxy = getattr(options, "proxy", None)
-        self.delay = getattr(options, "delay", 3.0)
-        self.full_page_capture = getattr(options, "full_page", False)
-        self.resolution = getattr(options, "resolution", "800x600")
+        self.cache_dir = Path.home() / ".webcap"
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self.proxy = proxy
+        self.delay = delay
+        self.user_agent = user_agent
+        self.full_page_capture = full_page_capture
+        self.resolution = str(resolution)
         self.resolution = [int(x) for x in self.resolution.split("x")]
         x, y = self.resolution
 
@@ -66,15 +76,18 @@ class Browser(WebCapBase):
             self.log.info("Running as root, adding --no-sandbox")
             self.chrome_flags += ["--no-sandbox"]
 
-        self.uri = None
+        self.wap_session_id = None
+
+        self.websocket_uri = None
         self.websocket = None
         self.pending_requests = {}
         self.tabs = {}
-        self.sessions = {}
+        self.event_handlers = {}
 
         self._closed = False
         self._current_message_id = 0
         self._message_id_lock = asyncio.Lock()
+        self._screenshot_lock = asyncio.Lock()
         self._message_handler_task = None
 
         self._process_pool = ProcessPoolExecutor()
@@ -83,25 +96,28 @@ class Browser(WebCapBase):
         async for url, webscreenshot in task_pool(self.screenshot, urls):
             yield url, webscreenshot
 
+    async def screenshot(self, url):
+        try:
+            tab = await self.new_tab()
+            await tab.navigate(url)
+            return await tab.screenshot()
+        finally:
+            await tab.close()
+
     async def new_tab(self):
         tab = Tab(self)
         await tab.create()
         return tab
 
-    async def screenshot(self, url):
-        try:
-            tab = await self.new_tab()
-            await tab.navigate(url)
-            # await asyncio.sleep(5.0)
-            return await tab.screenshot()
-        finally:
-            await tab.close()
+    async def start(self):
+        await self.detect_chrome_path()
+        await self._start_chrome()
+        await self._start_message_handler()
 
-    async def _next_message_id(self):
-        async with self._message_id_lock:
-            message_id = int(self._current_message_id)
-            self._current_message_id += 1
-        return message_id
+        # wap_session_id = await self.get_wap_session()
+
+        # intercept network requests
+        # await self.request("Network.setRequestInterception", patterns=[{"urlPattern": "*"}])
 
     async def handle_event(self, event):
         # Handle response to a specific request
@@ -127,36 +143,18 @@ class Browser(WebCapBase):
             # distribute to session
             session_id = event.get("sessionId", None)
             if session_id:
-                self.log.info(f"DOING EVENT: {method}")
                 try:
-                    handler = self.sessions[session_id].handle_event
+                    handler = self.event_handlers[session_id]
                     await handler(event)
                 except KeyError:
                     self.log.error(f"No handler for event {method} in session {session_id}")
         else:
             self.log.error(f"Unknown message: {event}")
 
-    async def _message_handler(self):
-        """Background task to handle incoming messages"""
-        try:
-            while self.websocket and not self._closed:
-                message = await self.websocket.recv()
-                response = orjson.loads(message)
-                self.log.info(f"GOT MESSAGE: {response}")
-                await self.handle_event(response)
-
-        except websockets.ConnectionClosed as e:
-            self.log.info(f"WebSocket connection closed: {e}")
-        except Exception as e:
-            self.log.error(f"Error in message handler: {e}")
-            import traceback
-
-            traceback.print_exc()
-        finally:
-            self._closed = True
-
-    async def request(self, command, **params):
+    async def request(self, command, sessionId=None, **params):
         request, future = await self._build_request(command, **params)
+        if sessionId:
+            request["sessionId"] = sessionId
         await self._send_request(request)
         return await future
 
@@ -185,10 +183,10 @@ class Browser(WebCapBase):
         self.log.info(f"SENDING REQUEST: {request}")
         await self.websocket.send(orjson.dumps(request).decode("utf-8"))
 
-    async def start(self):
+    async def detect_chrome_path(self):
         # enumerate chrome path
         if self.chrome_path is None:
-            for i in self.chrome_paths:
+            for i in self.possible_chrome_binaries:
                 chrome_path = shutil.which(i)
                 if chrome_path:
                     # run chrome_path --version
@@ -212,16 +210,22 @@ class Browser(WebCapBase):
         if not self.chrome_path:
             raise Exception("Chrome executable not found")
 
+    async def _start_chrome(self):
+        # download wap
+        # wap_path = await download_wap(self.version, self.cache_dir)
+
         # start chrome process
         if self.chrome_process is None:
             chrome_command = [
                 self.chrome_path,
             ] + self.chrome_flags
-            self.log.info(" ".join(chrome_command))
+            # if wap_path is not None:
+            #     chrome_command += [f"--load-extension={wap_path}"]
+            self.log.critical(" ".join(chrome_command))
             self.chrome_process = Popen(chrome_command, stdout=PIPE, stderr=PIPE)
 
         # loop until we get the chrome uri
-        while self.uri is None:
+        while self.websocket_uri is None:
             # if chrome process has exited, raise an exception
             return_code = self.chrome_process.poll()
             if return_code is not None and return_code != 0:
@@ -231,18 +235,19 @@ class Browser(WebCapBase):
             try:
                 async with httpx.AsyncClient() as client:
                     response = await client.get("http://127.0.0.1:9222/json/version")
-                    self.uri = response.json()["webSocketDebuggerUrl"]
+                    self.websocket_uri = response.json()["webSocketDebuggerUrl"]
             except Exception as e:
                 self.log.info(f"Error getting Chrome URI: {e}, retrying...")
                 await asyncio.sleep(0.1)
 
         # connect to chrome
-        self.websocket = await websockets.connect(self.uri, max_size=50_000_000)
+        self.websocket = await websockets.connect(self.websocket_uri, max_size=500_000_000)
 
-        # start message handler
-        self._message_handler_task = asyncio.create_task(self._message_handler())
+        # enumerate supported CDP commands
+        await self._enum_commands()
 
-        # get supported commands
+    async def _enum_commands(self):
+        # get supported CDP commands
         async with httpx.AsyncClient() as client:
             self._protocol = (await client.get("http://127.0.0.1:9222/json/protocol")).json()
             self._commands = {}
@@ -251,8 +256,27 @@ class Browser(WebCapBase):
                 commands = set(command["name"] for command in domain["commands"])
                 self._commands[domain_name] = commands
 
-        # intercept network requests
-        # await self.request("Network.setRequestInterception", patterns=[{"urlPattern": "*"}])
+    async def _start_message_handler(self):
+        self._message_handler_task = asyncio.create_task(self._message_handler())
+
+    async def _message_handler(self):
+        """Background task to handle incoming messages"""
+        try:
+            while self.websocket and not self._closed:
+                message = await self.websocket.recv()
+                response = orjson.loads(message)
+                self.log.info(f"GOT MESSAGE: {response}")
+                await self.handle_event(response)
+
+        except websockets.ConnectionClosed as e:
+            self.log.info(f"WebSocket connection closed: {e}")
+        except Exception as e:
+            self.log.critical(f"Error in message handler: {e}")
+            import traceback
+
+            traceback.print_exc()
+        finally:
+            self._closed = True
 
     async def stop(self):
         self.log.info("STOPPING BROWSER")
@@ -266,6 +290,53 @@ class Browser(WebCapBase):
         shutil.rmtree(self.temp_dir, ignore_errors=True)
         with suppress(Exception):
             self.chrome_process.terminate()
+
+    @classmethod
+    def argparse_to_kwargs(cls, options):
+        kwargs = {}
+        for name in get_keyword_args(cls.__init__):
+            try:
+                value = getattr(options, name)
+                if value is not None:
+                    kwargs[name] = value
+            except AttributeError:
+                pass
+        return kwargs
+
+    async def _next_message_id(self):
+        async with self._message_id_lock:
+            message_id = int(self._current_message_id)
+            self._current_message_id += 1
+        return message_id
+
+    async def get_wap_session(self):
+        # wait for chrome extension to come online (100 iterations == 10 seconds)
+        wap_target_id = None
+        async with httpx.AsyncClient() as client:
+            for i in range(100):
+                response = await client.get("http://127.0.0.1:9222/json")
+                targets = response.json()
+                for target in targets[::-1]:
+                    target_type = target.get("type", "")
+                    target_url = target.get("url", "")
+                    target_id = target.get("id", "")
+                    if target_type == "service_worker" and target_url.startswith("chrome-extension://") and target_id:
+                        wap_target_id = target_id
+                        break
+                await asyncio.sleep(0.1)
+        if wap_target_id is None:
+            raise WebCapError("Failed to find WAP extension target")
+        # attach to the target
+        for i in range(100):
+            try:
+                wap_response = await self.request("Target.attachToTarget", targetId=wap_target_id, flatten=True)
+                self.wap_session_id = wap_response.get("sessionId", None)
+            except DevToolsProtocolError:
+                await asyncio.sleep(0.1)
+                continue
+        if self.wap_session_id is not None:
+            return self.wap_session_id
+        raise WebCapError("Timed out waiting for chrome extension to load:")
 
     def __del__(self):
         self.cleanup()

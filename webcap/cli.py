@@ -7,6 +7,7 @@ import logging
 import argparse
 from pathlib import Path
 
+from webcap import defaults
 from webcap.browser import Browser
 from webcap.helpers import str_or_file_list
 
@@ -42,16 +43,26 @@ async def _main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "urls", nargs="+", help="The URL(s) to capture - can be either single URLs or files containing URLs"
+        "-u", "--urls", nargs="+", help="The URL(s) to capture - can be either single URLs or files containing URLs"
     )
     parser.add_argument("-c", "--chrome", help="Path to Chrome executable")
-    parser.add_argument("-r", "--resolution", default="1400x900", type=resolution_type, help="Resolution to capture")
+    parser.add_argument(
+        "-r", "--resolution", default=defaults.resolution, type=resolution_type, help="Resolution to capture"
+    )
     parser.add_argument("-o", "--output", type=Path, default=default_output_dir, help="Output directory")
-    parser.add_argument("-d", "--delay", type=float, default=3.0, help="Delay before capturing (default: 3.0 seconds)")
+    parser.add_argument(
+        "-d", "--delay", type=float, default=defaults.delay, help="Delay before capturing (default: 3.0 seconds)"
+    )
     parser.add_argument(
         "-f", "--full-page", action="store_true", help="Capture the full page (larger resolution images)"
     )
-    parser.add_argument("-u", "--user-agent", help="User agent to use")
+    parser.add_argument("-U", "--user-agent", default=defaults.user_agent, help="User agent to use")
+    parser.add_argument(
+        "-H",
+        "--headers",
+        nargs="+",
+        help="Additional headers to send in format: 'Header-Name: Header-Value' (multiple supported)",
+    )
     parser.add_argument("-j", "--json", action="store_true", help="Output JSON")
     parser.add_argument("-p", "--proxy", help="HTTP proxy to use")
     parser.add_argument("--debug", action="store_true", help="Enable debugging")
@@ -75,7 +86,8 @@ async def _main():
         root_logger = logging.getLogger("webcap")
         root_logger.setLevel(logging.DEBUG)
 
-    browser = Browser(options)
+    browser_kwargs = Browser.argparse_to_kwargs(options)
+    browser = Browser(**browser_kwargs)
     await browser.start()
     async for url, webscreenshot in browser.screenshot_urls(urls):
         if webscreenshot is None:

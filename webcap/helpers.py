@@ -1,7 +1,15 @@
+import io
 import re
+import time
+import httpx
+import shutil
 import asyncio
+import inspect
+import zipfile
 from pathlib import Path
 from contextlib import suppress
+
+wap_id = "gppongmhjkpfnbhagpmjfkannfbllamg"
 
 
 async def task_pool(fn, all_args, threads=10, global_kwargs=None):
@@ -62,3 +70,53 @@ def sanitize_filename(filename):
     # collapse multiple underscores
     filename = sub_regex_multiple.sub("-", filename)
     return filename
+
+
+def get_keyword_args(fn):
+    """
+    Inspects a function and returns a dictionary of keyword arguments.
+    """
+    signature = inspect.signature(fn)
+    keyword_args = {
+        name: param.default
+        for name, param in signature.parameters.items()
+        if param.default is not param.empty and name != "self"
+    }
+    return keyword_args
+
+
+async def download_wap(chrome_version, output_dir):
+    ext_dir = Path(output_dir) / chrome_version
+    # if the file exists and it's younger than 1 month, return it
+    if ext_dir.is_dir() and ext_dir.stat().st_mtime > time.time() - (60 * 60 * 24 * 30):
+        print(f"Using cached WAP for Chrome {chrome_version}")
+        return ext_dir
+
+    shutil.rmtree(ext_dir, ignore_errors=True)
+
+    # otherwise go download it
+    ext_url = f"https://clients2.google.com/service/update2/crx?response=redirect&prodversion={chrome_version}&acceptformat=crx2,crx3&x=id%3D{wap_id}%26installsource%3Dondemand%26uc"
+    # get .crx file and write to file
+    async with httpx.AsyncClient(follow_redirects=True) as client:
+        response = await client.get(ext_url)
+        print(f"Downloading WAP for Chrome {chrome_version}, response: {response}")
+        # return None if it's not a successful response
+        if not str(getattr(response, "status_code", 0)).startswith("2"):
+            return
+
+        # unzip the crx file
+        # make bytesio from response.content
+        with zipfile.ZipFile(io.BytesIO(response.content), "r") as zip_ref:
+            zip_ref.extractall(ext_dir)
+
+        # remove open() calls
+        for file in ("index", "popup"):
+            file_path = ext_dir / "js" / f"{file}.js"
+            if file_path.is_file():
+                with open(file_path, "r") as f:
+                    content = f.read()
+                content = content.replace(" open(", " console.log(")
+                with open(file_path, "w") as f:
+                    f.write(content)
+
+        return ext_dir

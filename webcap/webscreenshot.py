@@ -3,7 +3,7 @@ import base64
 import asyncio
 import imagehash
 from PIL import Image
-
+from urllib.parse import urlparse
 from webcap.base import WebCapBase
 from webcap.helpers import sanitize_filename
 
@@ -20,6 +20,12 @@ class WebScreenshot(WebCapBase):
         self.status_code = 0
         self._blob = None
         self._perception_hash = None
+
+    @property
+    def hostname(self):
+        if self.url is None:
+            raise ValueError("URL not yet set")
+        return urlparse(self.url).hostname
 
     @property
     def blob(self):

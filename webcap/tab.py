@@ -1,4 +1,5 @@
 import time
+import orjson
 import asyncio
 
 from webcap.base import WebCapBase
@@ -18,9 +19,6 @@ class Tab(WebCapBase):
         self._network_requests = set()
         self._last_active_time = time.time()
 
-    def send_request(self, *args, **kwargs):
-        return self.browser.send_request(*args, **kwargs)
-
     async def create(self):
         if self.tab_id is None:
             # Create a new page/tab
@@ -30,18 +28,16 @@ class Tab(WebCapBase):
         if self.session_id is None:
             response = await self.browser.request("Target.attachToTarget", targetId=self.tab_id, flatten=True)
             self.session_id = response["sessionId"]
-            self.browser.sessions[self.session_id] = self
+            self.browser.event_handlers[self.session_id] = self.handle_event
         # Enable the Page domain to receive events
         await self.request("Page.enable")
         await self.request("Network.enable")
+        # await self.request("Runtime.enable")
 
-    async def request(self, method, **kwargs):
+    def request(self, method, **kwargs):
         if self.session_id is None:
             raise WebCapError("You must call create() before making a request")
-        request, future = await self.browser._build_request(method, **kwargs)
-        request["sessionId"] = self.session_id
-        await self.browser._send_request(request)
-        return await future
+        return self.browser.request(method, sessionId=self.session_id, **kwargs)
 
     async def handle_event(self, event):
         event_method = event.get("method")
@@ -64,6 +60,21 @@ class Tab(WebCapBase):
             if response_type == "Document":
                 self.webscreenshot.status_code = status_code
 
+    async def navigate(self, url):
+        self.webscreenshot.url = url
+        # navigate to the URL
+        await self.request("Page.navigate", url=url)
+        # wait for the page to load
+        await self.wait_for_page_load()
+        # await self.get_technologies()
+
+        navigation_history = await self.request("Page.getNavigationHistory")
+        navigation_history = [
+            {"title": h.get("title", ""), "url": h.get("url", "")} for h in navigation_history["entries"]
+        ]
+        navigation_history = [h for h in navigation_history if h["url"] != "about:blank"]
+        self.webscreenshot.navigation_history = navigation_history
+
     async def wait_for_page_load(self):
         time_left = float(self.browser.delay)
         # loop in .1 second increments
@@ -77,32 +88,22 @@ class Tab(WebCapBase):
         if self._page_loaded_future:
             self._page_loaded_future.set_result(None)
 
-    async def navigate(self, url):
-        self.webscreenshot.url = url
-        # navigate to the URL
-        await self.request("Page.navigate", url=url)
-        # wait for the page to load
-        await self.wait_for_page_load()
-        navigation_history = await self.request("Page.getNavigationHistory")
-        navigation_history = [
-            {"title": h.get("title", ""), "url": h.get("url", "")} for h in navigation_history["entries"]
-        ]
-        navigation_history = [h for h in navigation_history if h["url"] != "about:blank"]
-        self.webscreenshot.navigation_history = navigation_history
-
     async def screenshot(self):
-        # Capture the screenshot
-        kwargs = {"format": "png", "quality": 80}
-        if self.browser.full_page_capture:
-            kwargs["captureBeyondViewport"] = True
-        response = await self.request("Page.captureScreenshot", **kwargs)
-        self.webscreenshot.base64 = response["data"]
+        async with self.browser._screenshot_lock:
+            # switch to our tab
+            await self.request("Target.activateTarget", targetId=self.tab_id)
+            # Capture the screenshot
+            kwargs = {"format": "png", "quality": 100}
+            if self.browser.full_page_capture:
+                kwargs["captureBeyondViewport"] = True
+            response = await self.request("Page.captureScreenshot", **kwargs)
+            self.webscreenshot.base64 = response["data"]
         return self.webscreenshot
 
     async def close(self):
         # Remove the tab from the browser's tabs and sessions
         self.browser.tabs.pop(self.tab_id, None)
-        self.browser.sessions.pop(self.session_id, None)
+        self.browser.event_handlers.pop(self.session_id, None)
         # Disable the Page domain to stop receiving events
         # await self.request("Page.disable")
         # Close the page
@@ -113,3 +114,31 @@ class Tab(WebCapBase):
         root_node = nodes["root"]
         outer_html = await self.request("DOM.getOuterHTML", nodeId=root_node["nodeId"])
         return outer_html["outerHTML"]
+
+    async def get_technologies(self):
+        # await asyncio.sleep(5)
+        technologies = []
+        if self.browser.wap_session_id is None:
+            return technologies
+        response = await self.browser.request(
+            "Runtime.evaluate",
+            sessionId=self.browser.wap_session_id,
+            expression=f"JSON.stringify(Driver.cache.hostnames['{self.webscreenshot.hostname}'])",
+            awaitPromise=True,
+            returnByValue=True,
+        )
+        technologies = []
+        if isinstance(response, dict):
+            tech_json = response.get("result", {}).get("value", "")
+            if tech_json:
+                technologies = orjson.loads(tech_json)
+                if "detections" in technologies:
+                    for technology in technologies["detections"]:
+                        technology = technology.get("technology", {})
+                        name = technology.get("name", "")
+                        categories = technology.get("categories", [])
+                        icon = technology.get("icon", "")
+                        slug = technology.get("slug", "")
+                        # print(name, categories, slug)
+                        technologies[name] = {"categories": categories, "icon": icon, "slug": slug}
+        return technologies
