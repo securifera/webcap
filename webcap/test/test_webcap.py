@@ -1,109 +1,16 @@
 import time
-import shutil
 import base64
 import pytest
 import asyncio
 import logging
-import tempfile
 import extractous
 from pathlib import Path
-from werkzeug import Response
-
-from lxml import html
-from lxml.etree import tostring
 
 from webcap import Browser
+from webcap.test.helpers import *
 from webcap.webscreenshot import WebScreenshot
 
 logging.getLogger().setLevel(logging.DEBUG)
-
-
-@pytest.fixture
-def temp_dir():
-    tempdir = Path(tempfile.gettempdir()) / ".webcap-test"
-    tempdir.mkdir(parents=True, exist_ok=True)
-    yield tempdir
-    shutil.rmtree(tempdir)
-
-
-@pytest.fixture
-def webcap_httpserver(make_httpserver):
-    httpserver = make_httpserver
-    httpserver.clear()
-
-    # httpserver custom response function that returns the headers + user agent
-    def custom_response(request):
-        body = ""
-        for header_name, header_value in request.headers.items():
-            header_name = header_name.lower()
-            if header_name.startswith("webcap-test") or header_name == "user-agent":
-                body += f"{header_name}: {header_value}\n"
-        response = Response(html_body.replace("[[body]]", f"<p>{body}</p>"))
-        response.headers.add("Content-Type", "text/html")
-        return response
-
-    # Set up the httpserver to use the custom response handler
-    httpserver.expect_request("/").respond_with_handler(custom_response)
-
-    # Return the configured httpserver
-    return httpserver
-
-
-def normalize_html(html_content):
-    # Parse the HTML content
-    tree = html.fromstring(html_content)
-
-    # Normalize the tree by stripping whitespace and sorting attributes
-    for element in tree.iter():
-        if element.text:
-            element.text = element.text.strip()
-        if element.tail:
-            element.tail = element.tail.strip()
-
-        # Create a sorted list of attribute items
-        sorted_attrib = sorted(element.attrib.items())
-
-        # Clear existing attributes and set them in sorted order
-        element.attrib.clear()
-        for k, v in sorted_attrib:
-            element.attrib[k] = v.strip()
-
-    # Return the normalized HTML as a string with pretty print
-    return tostring(tree, method="html", encoding="unicode")  # , pretty_print=True)
-
-
-html_body = """
-<html>
-    <head>
-        <title>frankie</title>
-        <script>
-            // when the page loads, add a <p> element to the body
-            window.addEventListener("load", function() {
-                document.body.innerHTML += "<p>hello frank</p>";
-            });
-        </script>
-    </head>
-    <body>[[body]]</body>
-</html>
-"""
-rendered_html_body = """
-<html>
-    <head>
-        <title>frankie</title>
-        <script>
-            // when the page loads, add a <p> element to the body
-            window.addEventListener("load", function() {
-                document.body.innerHTML += "<p>hello frank</p>";
-            });
-        </script>
-    </head>
-    <body>
-        <p>user-agent: testagent</p>
-        <p>hello frank</p>
-    </body>
-</html>
-"""
-parsed_rendered = normalize_html(rendered_html_body)
 
 
 @pytest.mark.asyncio
@@ -131,6 +38,34 @@ async def test_screenshot(webcap_httpserver, temp_dir):
 
     # clean up
     image_path.unlink()
+    await browser.stop()
+
+
+@pytest.mark.asyncio
+async def test_screenshot_redirect(webcap_httpserver):
+    url = webcap_httpserver.url_for("/test2")
+    browser = Browser()
+    await browser.start()
+    webscreenshot = await browser.screenshot(url)
+
+    # distill navigation history down into url, status, and mimetype
+    keys = ("url", "status", "mimeType")
+    navigation_history = [{k: w[k] for k in keys} for w in webscreenshot.navigation_history]
+    assert navigation_history == [
+        {"url": webcap_httpserver.url_for("/test2"), "status": 302, "mimeType": "text/plain"},
+        {"url": webcap_httpserver.url_for("/test3"), "status": 302, "mimeType": "text/plain"},
+        {"url": webcap_httpserver.url_for("/"), "status": 200, "mimeType": "text/html"},
+    ]
+
+    network_history = [{k: w[k] for k in keys} for w in webscreenshot.network_history]
+    assert network_history == [
+        {"url": webcap_httpserver.url_for("/test2"), "status": 302, "mimeType": "text/plain"},
+        {"url": webcap_httpserver.url_for("/test3"), "status": 302, "mimeType": "text/plain"},
+        {"url": webcap_httpserver.url_for("/"), "status": 200, "mimeType": "text/html"},
+        {"url": webcap_httpserver.url_for("/js.js"), "status": 200, "mimeType": "application/javascript"},
+        {"url": webcap_httpserver.url_for("/favicon.ico"), "status": 500, "mimeType": "text/plain"},
+    ]
+
     await browser.stop()
 
 
@@ -188,21 +123,102 @@ async def test_cli(monkeypatch, webcap_httpserver, capsys, temp_dir):
     import json
     from webcap.cli import _main
 
+    # disable sys.exit
+    monkeypatch.setattr(sys, "exit", lambda x: None)
+
     monkeypatch.setattr(sys, "argv", ["webcap", "-u", url, "-U", "testagent", "--json", "--output", str(temp_dir)])
+    await _main()
+    captured = capsys.readouterr()
+    # assert "hello frank" in captured.out
+    json_out = json.loads(captured.out)
+    assert "dom" not in json_out
+    assert "image_base64" not in json_out
+    assert "scripts" not in json_out
+    assert not any("body" in n for n in json_out["network_history"])
+    assert json_out["title"] == "frankie"
+    assert json_out["status_code"] == 200
+    assert json_out["perception_hash"] == "830303070f0f3fff"
+    assert len(json_out["network_history"]) == 3
+    assert len(json_out["navigation_history"]) == 1
+
+    # DOM
+    monkeypatch.setattr(
+        sys, "argv", ["webcap", "-u", url, "-U", "testagent", "--json", "--dom", "--output", str(temp_dir)]
+    )
     await _main()
     captured = capsys.readouterr()
     assert "hello frank" in captured.out
     json_out = json.loads(captured.out)
+    assert "dom" in json_out
+    assert "image_base64" not in json_out
+    assert "scripts" not in json_out
+    assert not any("body" in n for n in json_out["network_history"])
     parsed_dom = normalize_html(json_out.pop("dom", ""))
     assert parsed_dom == parsed_rendered
+
+    nav_history = json_out.pop("navigation_history", [])
+    assert len(nav_history) == 1
+    assert nav_history[0]["url"] == url
+    assert nav_history[0]["status"] == 200
+    assert nav_history[0]["mimeType"] == "text/html"
+
+    network_history = json_out.pop("network_history", [])
+    assert len(network_history) == 3
+    assert network_history[0]["url"] == url
+    assert network_history[0]["status"] == 200
+    assert network_history[0]["mimeType"] == "text/html"
+    assert network_history[1]["url"] == webcap_httpserver.url_for("/js.js")
+    assert network_history[1]["status"] == 200
+    assert network_history[1]["mimeType"] == "application/javascript"
+    assert network_history[2]["url"] == webcap_httpserver.url_for("/favicon.ico")
+    assert network_history[2]["status"] == 500
+    assert network_history[2]["mimeType"] == "text/plain"
+
     assert json_out == {
         "url": url,
         "final_url": url,
         "title": "frankie",
         "status_code": 200,
-        "navigation_history": [{"title": "frankie", "url": url}],
         "perception_hash": "830303070f0f3fff",
     }
+
+    # Javascript
+    monkeypatch.setattr(
+        sys, "argv", ["webcap", "-u", url, "-U", "testagent", "--json", "--javascript", "--output", str(temp_dir)]
+    )
+    await _main()
+    captured = capsys.readouterr()
+    json_out = json.loads(captured.out)
+    assert "dom" not in json_out
+    assert "image_base64" not in json_out
+    assert "scripts" in json_out
+    assert not any("body" in n for n in json_out["network_history"])
+    assert len(json_out["scripts"]) == 2
+
+    # Base64 blob
+    monkeypatch.setattr(
+        sys, "argv", ["webcap", "-u", url, "-U", "testagent", "--json", "--base64", "--output", str(temp_dir)]
+    )
+    await _main()
+    captured = capsys.readouterr()
+    json_out = json.loads(captured.out)
+    assert "dom" not in json_out
+    assert "image_base64" in json_out
+    assert "scripts" not in json_out
+    assert not any("body" in n for n in json_out["network_history"])
+
+    # Network responses
+    monkeypatch.setattr(
+        sys, "argv", ["webcap", "-u", url, "-U", "testagent", "--json", "--responses", "--output", str(temp_dir)]
+    )
+    await _main()
+    captured = capsys.readouterr()
+    json_out = json.loads(captured.out)
+    assert "dom" not in json_out
+    assert "image_base64" not in json_out
+    assert "scripts" not in json_out
+    assert all("body" in n for n in json_out["network_history"])
+    assert len(json_out["network_history"]) == 3
 
     # sanitize_filename
     from webcap.helpers import sanitize_filename
@@ -221,9 +237,14 @@ async def test_cli(monkeypatch, webcap_httpserver, capsys, temp_dir):
 
     assert get_keyword_args(Browser) == {
         "chrome_path": None,
+        "delay": 3.0,
+        "dom": False,
+        "full_page": False,
+        "javascript": False,
+        "responses": False,
+        "base64": False,
+        "threads": 15,
         "resolution": "1440x900",
         "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
         "proxy": None,
-        "delay": 3.0,
-        "full_page_capture": False,
     }

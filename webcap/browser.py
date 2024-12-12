@@ -41,18 +41,24 @@ class Browser(WebCapBase):
 
     def __init__(
         self,
+        threads=defaults.threads,
         chrome_path=None,
         resolution=defaults.resolution,
         user_agent=defaults.user_agent,
         proxy=None,
         delay=defaults.delay,
-        full_page_capture=False,
+        full_page=False,
+        dom=False,
+        javascript=False,
+        responses=False,
+        base64=False,
     ):
         super().__init__()
         atexit.register(self.cleanup)
         self.chrome_process = None
         self.chrome_path = chrome_path
         self.chrome_version_regex = re.compile(r"[A-za-z][A-Za-z ]+([\d\.]+)")
+        self.threads = threads
         self.temp_dir = Path(tempfile.gettempdir()) / ".webcap"
         self.temp_dir.mkdir(parents=True, exist_ok=True)
         self.cache_dir = Path.home() / ".webcap"
@@ -60,7 +66,11 @@ class Browser(WebCapBase):
         self.proxy = proxy
         self.delay = delay
         self.user_agent = user_agent
-        self.full_page_capture = full_page_capture
+        self.full_page_capture = full_page
+        self.capture_javascript = javascript
+        self.capture_responses = responses
+        self.capture_base64 = base64
+        self.capture_dom = dom
         self.resolution = str(resolution)
         self.resolution = [int(x) for x in self.resolution.split("x")]
         x, y = self.resolution
@@ -82,31 +92,32 @@ class Browser(WebCapBase):
         self.websocket = None
         self.pending_requests = {}
         self.tabs = {}
-        self.event_handlers = {}
+        self.event_queues = {}
 
         self._closed = False
         self._current_message_id = 0
         self._message_id_lock = asyncio.Lock()
-        self._screenshot_lock = asyncio.Lock()
+        self._tab_lock = asyncio.Lock()
         self._message_handler_task = None
 
         self._process_pool = ProcessPoolExecutor()
 
     async def screenshot_urls(self, urls):
-        async for url, webscreenshot in task_pool(self.screenshot, urls):
+        async for url, webscreenshot in task_pool(self.screenshot, urls, threads=self.threads):
             yield url, webscreenshot
 
     async def screenshot(self, url):
         try:
-            tab = await self.new_tab()
-            await tab.navigate(url)
+            tab = await self.new_tab(url)
             return await tab.screenshot()
         finally:
-            await tab.close()
+            with suppress(Exception):
+                await tab.close()
 
-    async def new_tab(self):
+    async def new_tab(self, url):
         tab = Tab(self)
         await tab.create()
+        await tab.navigate(url)
         return tab
 
     async def start(self):
@@ -120,6 +131,9 @@ class Browser(WebCapBase):
         # await self.request("Network.setRequestInterception", patterns=[{"urlPattern": "*"}])
 
     async def handle_event(self, event):
+        # import json
+
+        # print(json.dumps(event, indent=2))
         # Handle response to a specific request
         if "id" in event:
             message_id = event["id"]
@@ -130,7 +144,8 @@ class Browser(WebCapBase):
                     msg = f"{error}"
                     future.set_exception(DevToolsProtocolError(msg))
                 else:
-                    future.set_result(event.get("result", {}))
+                    with suppress(Exception):
+                        future.set_result(event.get("result", {}))
                 del self.pending_requests[message_id]
 
         # Handle browser events
@@ -144,10 +159,11 @@ class Browser(WebCapBase):
             session_id = event.get("sessionId", None)
             if session_id:
                 try:
-                    handler = self.event_handlers[session_id]
-                    await handler(event)
+                    event_queue = self.event_queues[session_id]
+                    await event_queue.put(event)
                 except KeyError:
-                    self.log.error(f"No handler for event {method} in session {session_id}")
+                    if method not in ["Inspector.detached", "Page.frameDetached"]:
+                        self.log.debug(f"No handler for event {method} in session {session_id}")
         else:
             self.log.error(f"Unknown message: {event}")
 
@@ -221,7 +237,7 @@ class Browser(WebCapBase):
             ] + self.chrome_flags
             # if wap_path is not None:
             #     chrome_command += [f"--load-extension={wap_path}"]
-            self.log.critical(" ".join(chrome_command))
+            self.log.debug("Executing chrome command: " + " ".join(chrome_command))
             self.chrome_process = Popen(chrome_command, stdout=PIPE, stderr=PIPE)
 
         # loop until we get the chrome uri
@@ -292,7 +308,7 @@ class Browser(WebCapBase):
             self.chrome_process.terminate()
 
     @classmethod
-    def argparse_to_kwargs(cls, options):
+    def from_argparse(cls, options):
         kwargs = {}
         for name in get_keyword_args(cls.__init__):
             try:
@@ -301,7 +317,7 @@ class Browser(WebCapBase):
                     kwargs[name] = value
             except AttributeError:
                 pass
-        return kwargs
+        return cls(**kwargs)
 
     async def _next_message_id(self):
         async with self._message_id_lock:
@@ -309,34 +325,34 @@ class Browser(WebCapBase):
             self._current_message_id += 1
         return message_id
 
-    async def get_wap_session(self):
-        # wait for chrome extension to come online (100 iterations == 10 seconds)
-        wap_target_id = None
-        async with httpx.AsyncClient() as client:
-            for i in range(100):
-                response = await client.get("http://127.0.0.1:9222/json")
-                targets = response.json()
-                for target in targets[::-1]:
-                    target_type = target.get("type", "")
-                    target_url = target.get("url", "")
-                    target_id = target.get("id", "")
-                    if target_type == "service_worker" and target_url.startswith("chrome-extension://") and target_id:
-                        wap_target_id = target_id
-                        break
-                await asyncio.sleep(0.1)
-        if wap_target_id is None:
-            raise WebCapError("Failed to find WAP extension target")
-        # attach to the target
-        for i in range(100):
-            try:
-                wap_response = await self.request("Target.attachToTarget", targetId=wap_target_id, flatten=True)
-                self.wap_session_id = wap_response.get("sessionId", None)
-            except DevToolsProtocolError:
-                await asyncio.sleep(0.1)
-                continue
-        if self.wap_session_id is not None:
-            return self.wap_session_id
-        raise WebCapError("Timed out waiting for chrome extension to load:")
+    # async def get_wap_session(self):
+    #     # wait for chrome extension to come online (100 iterations == 10 seconds)
+    #     wap_target_id = None
+    #     async with httpx.AsyncClient() as client:
+    #         for i in range(100):
+    #             response = await client.get("http://127.0.0.1:9222/json")
+    #             targets = response.json()
+    #             for target in targets[::-1]:
+    #                 target_type = target.get("type", "")
+    #                 target_url = target.get("url", "")
+    #                 target_id = target.get("id", "")
+    #                 if target_type == "service_worker" and target_url.startswith("chrome-extension://") and target_id:
+    #                     wap_target_id = target_id
+    #                     break
+    #             await asyncio.sleep(0.1)
+    #     if wap_target_id is None:
+    #         raise WebCapError("Failed to find WAP extension target")
+    #     # attach to the target
+    #     for i in range(100):
+    #         try:
+    #             wap_response = await self.request("Target.attachToTarget", targetId=wap_target_id, flatten=True)
+    #             self.wap_session_id = wap_response.get("sessionId", None)
+    #         except DevToolsProtocolError:
+    #             await asyncio.sleep(0.1)
+    #             continue
+    #     if self.wap_session_id is not None:
+    #         return self.wap_session_id
+    #     raise WebCapError("Timed out waiting for chrome extension to load:")
 
     def __del__(self):
         self.cleanup()
