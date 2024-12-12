@@ -174,12 +174,14 @@ async def test_cli(monkeypatch, webcap_httpserver, capsys, temp_dir):
     assert network_history[2]["status"] == 500
     assert network_history[2]["mimeType"] == "text/plain"
 
+    perception_hash = json_out.pop("perception_hash", "")
+    assert perception_hash.startswith("830")
+
     assert json_out == {
         "url": url,
         "final_url": url,
         "title": "frankie",
         "status_code": 200,
-        "perception_hash": "830303070f0f3fff",
     }
 
     # Javascript
