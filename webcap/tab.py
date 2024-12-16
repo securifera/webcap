@@ -1,10 +1,11 @@
 import time
 import orjson
 import asyncio
+from contextlib import suppress
 
 from webcap.base import WebCapBase
-from webcap.errors import WebCapError
 from webcap.webscreenshot import WebScreenshot
+from webcap.errors import WebCapError, DevToolsProtocolError
 
 
 class Tab(WebCapBase):
@@ -20,6 +21,9 @@ class Tab(WebCapBase):
         self._incoming_event_queue = asyncio.Queue()
         self._event_handler_task = None
         self._event_handler_started = asyncio.Event()
+        self._initial_semaphore_value = 25
+        self._semaphore = asyncio.Semaphore(self._initial_semaphore_value)
+        self._done_condition = asyncio.Condition()
         self._closed = False
 
     async def create(self):
@@ -72,39 +76,111 @@ class Tab(WebCapBase):
                 await self.handle_event(event)
             except Exception as e:
                 self.log.error(f"Error handling event: {e}")
+                import traceback
+
+                self.log.error(traceback.format_exc())
 
     async def handle_event(self, event):
-        event_method = event.get("method")
-        params = event.get("params", {})
-        self._last_active_time = time.time()
-        # page is finished loading
-        if event_method == "Page.loadEventFired":
-            self._page_loaded = True
-        # a network request is starting
-        elif event_method == "Network.requestWillBeSent":
-            # redirect
-            redirect_response = params.get("redirectResponse", {})
-            if redirect_response:
-                # import json
-                # print(json.dumps(params, indent=2))
-                request_id = params.get("requestId", "")
-                await self.webscreenshot.add_history(redirect_response, request_id, "redirectResponse")
-        # main request status code
-        elif event_method == "Network.responseReceived":
-            request_id = params["requestId"]
-            response_type = params.get("type", "")
-            response = params.get("response", {})
-            if response:
-                await self.webscreenshot.add_history(response, request_id, response_type)
+        async with self._semaphore:
+            event_method = event.get("method")
+            params = event.get("params", {})
+            self._last_active_time = time.time()
+            # page is finished loading
+            if event_method == "Page.loadEventFired":
+                self._page_loaded = True
+            # network request
+            elif event_method == "Network.requestWillBeSent":
+                await self.add_request(params)
+            # network response
+            elif event_method == "Network.responseReceived":
+                await self.add_response(params)
+            # javascript parsed
+            elif event_method == "Debugger.scriptParsed" and self.browser.capture_javascript:
+                await self.add_javascript(params)
 
-        # a script is parsed
-        elif event_method == "Debugger.scriptParsed" and self.browser.capture_javascript:
-            script_id = params.get("scriptId", "")
-            if script_id:
-                response = await self.request("Debugger.getScriptSource", scriptId=script_id)
-                source = response.get("scriptSource", "")
-                if source:
-                    self.webscreenshot.add_javascript(source, params.get("url", None))
+    async def add_request(self, request):
+        request_type = request.get("type", "Unknown")
+        if request_type in self.browser.ignored_types:
+            self.log.debug(f"Ignoring request type: {request_type}")
+            return
+
+        request_id = request.get("requestId", "")
+        redirect_response = request.pop("redirectResponse", {})
+        request_obj = self.webscreenshot.get_request_obj(request_id, request_type)
+        if self.browser.capture_requests:
+            request = request.get("request", {})
+            try:
+                request_obj["requests"].append(request)
+            except KeyError:
+                request_obj["requests"] = [request]
+
+        if redirect_response:
+            await self.add_response(redirect_response, request_id, request_type)
+
+    async def add_response(self, response, request_id=None, response_type=None):
+        if request_id is None:
+            request_id = response.get("requestId", "")
+            if not request_id:
+                raise DevToolsProtocolError(f"No requestId found in response: {response}")
+        if response_type is None:
+            response_type = response.get("type", "")
+            if not response_type:
+                raise DevToolsProtocolError(f"No response type found in response: {response}")
+
+        if response_type in self.browser.ignored_types:
+            self.log.debug(f"Ignoring response type: {response_type}")
+            return
+
+        with suppress(KeyError):
+            response = response["response"]
+
+        url = response.get("url", "")
+        status_code = response.get("status", 0)
+        mime_type = response.get("mimeType", "unknown")
+        headers = response.get("headers", {})
+        headers = {k.lower(): v for k, v in headers.items()}
+
+        nav_item = {"url": url, "status": status_code, "mimeType": mime_type}
+        if str(status_code).startswith("3") and "location" in headers:
+            nav_item["location"] = headers["location"]
+
+        request_obj = self.webscreenshot.get_request_obj(request_id, response_type)
+        # update with the latest response type (Document, Script, etc)
+        request_obj["type"] = response_type
+
+        # capture the response body if requested
+        if self.browser.capture_responses:
+            history_item = dict(
+                **nav_item,
+                **{
+                    "statusText": response.get("statusText", ""),
+                    "headers": headers,
+                    "charset": response.get("charset", ""),
+                    "protocol": response.get("protocol", ""),
+                    "remoteIPAddress": response.get("remoteIPAddress", ""),
+                    "remotePort": response.get("remotePort", 0),
+                },
+            )
+
+            # if it's not a redirect, capture the response body
+            # the response body isn't always available right away, so we retry a few times if needed
+            response_body = await self.request("Network.getResponseBody", requestId=request_id, retry=True)
+            history_item["responseBody"] = response_body.get("body", "")
+            try:
+                request_obj["responses"].append(history_item)
+            except KeyError:
+                request_obj["responses"] = [history_item]
+
+        if response_type == "Document" and not "":
+            self.webscreenshot.navigation_history.append(nav_item)
+
+    async def add_javascript(self, params):
+        script_id = params.get("scriptId", "")
+        if script_id:
+            response = await self.request("Debugger.getScriptSource", scriptId=script_id)
+            source = response.get("scriptSource", "")
+            if source:
+                self.webscreenshot.add_javascript(source, params.get("url", None))
 
     async def navigate(self, url):
         self.webscreenshot.url = url
@@ -127,6 +203,10 @@ class Tab(WebCapBase):
             self.webscreenshot.dom = await self.get_dom()
         if self._page_loaded_future:
             self._page_loaded_future.set_result(None)
+
+    async def wait_for_finish(self):
+        async with self._done_condition:
+            await self._done_condition.wait_for(lambda: self._semaphore._value == self._initial_semaphore_value)
 
     async def close(self):
         # Remove the tab from the browser's tabs and sessions
@@ -180,6 +260,5 @@ class Tab(WebCapBase):
                         categories = technology.get("categories", [])
                         icon = technology.get("icon", "")
                         slug = technology.get("slug", "")
-                        # print(name, categories, slug)
                         technologies[name] = {"categories": categories, "icon": icon, "slug": slug}
         return technologies

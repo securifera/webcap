@@ -44,27 +44,51 @@ async def test_screenshot(webcap_httpserver, temp_dir):
 @pytest.mark.asyncio
 async def test_screenshot_redirect(webcap_httpserver):
     url = webcap_httpserver.url_for("/test2")
-    browser = Browser()
+    browser = Browser(responses=True)
     await browser.start()
     webscreenshot = await browser.screenshot(url)
 
     # distill navigation history down into url, status, and mimetype
-    keys = ("url", "status", "mimeType")
-    navigation_history = [{k: w[k] for k in keys} for w in webscreenshot.navigation_history]
-    assert navigation_history == [
-        {"url": webcap_httpserver.url_for("/test2"), "status": 302, "mimeType": "text/plain"},
-        {"url": webcap_httpserver.url_for("/test3"), "status": 302, "mimeType": "text/plain"},
+    assert webscreenshot.navigation_history == [
+        {
+            "url": webcap_httpserver.url_for("/test2"),
+            "status": 302,
+            "mimeType": "text/plain",
+            "location": webcap_httpserver.url_for("/test3"),
+        },
+        {
+            "url": webcap_httpserver.url_for("/test3"),
+            "status": 302,
+            "mimeType": "text/plain",
+            "location": webcap_httpserver.url_for("/"),
+        },
         {"url": webcap_httpserver.url_for("/"), "status": 200, "mimeType": "text/html"},
     ]
 
-    network_history = [{k: w[k] for k in keys} for w in webscreenshot.network_history]
-    assert network_history == [
-        {"url": webcap_httpserver.url_for("/test2"), "status": 302, "mimeType": "text/plain"},
-        {"url": webcap_httpserver.url_for("/test3"), "status": 302, "mimeType": "text/plain"},
-        {"url": webcap_httpserver.url_for("/"), "status": 200, "mimeType": "text/html"},
-        {"url": webcap_httpserver.url_for("/js.js"), "status": 200, "mimeType": "application/javascript"},
-        {"url": webcap_httpserver.url_for("/favicon.ico"), "status": 500, "mimeType": "text/plain"},
+    assert len(webscreenshot.network_history) == 3
+
+    assert len(webscreenshot.responses) == 5
+    assert webscreenshot.requests == []
+
+    assert not any("requests" in r for r in webscreenshot.network_history)
+    assert [r["type"] for r in webscreenshot.network_history] == ["Document", "Script", "Other"]
+    responses_1, responses_2, responses_3 = [r["responses"] for r in webscreenshot.network_history]
+    assert len(responses_1) == 3
+    assert len(responses_2) == 1
+    assert len(responses_3) == 1
+    assert [r["url"] for r in responses_1] == [
+        webcap_httpserver.url_for("/test2"),
+        webcap_httpserver.url_for("/test3"),
+        webcap_httpserver.url_for("/"),
     ]
+    assert [r["url"] for r in responses_2] == [webcap_httpserver.url_for("/js.js")]
+    assert [r["url"] for r in responses_3] == [webcap_httpserver.url_for("/favicon.ico")]
+    assert [r["status"] for r in responses_1] == [302, 302, 200]
+    assert [r["status"] for r in responses_2] == [200]
+    assert [r["status"] for r in responses_3] == [500]
+    assert [r["mimeType"] for r in responses_1] == ["text/plain", "text/plain", "text/html"]
+    assert [r["mimeType"] for r in responses_2] == ["application/javascript"]
+    assert [r["mimeType"] for r in responses_3] == ["text/plain"]
 
     await browser.stop()
 
@@ -126,6 +150,7 @@ async def test_cli(monkeypatch, webcap_httpserver, capsys, temp_dir):
     # disable sys.exit
     monkeypatch.setattr(sys, "exit", lambda x: None)
 
+    # basic run
     monkeypatch.setattr(sys, "argv", ["webcap", "-u", url, "-U", "testagent", "--json", "--output", str(temp_dir)])
     await _main()
     captured = capsys.readouterr()
@@ -134,11 +159,11 @@ async def test_cli(monkeypatch, webcap_httpserver, capsys, temp_dir):
     assert "dom" not in json_out
     assert "image_base64" not in json_out
     assert "scripts" not in json_out
-    assert not any("body" in n for n in json_out["network_history"])
+    assert "requests" not in json_out
+    assert "responses" not in json_out
     assert json_out["title"] == "frankie"
     assert json_out["status_code"] == 200
     assert json_out["perception_hash"].startswith("830")
-    assert len(json_out["network_history"]) == 3
     assert len(json_out["navigation_history"]) == 1
 
     # DOM
@@ -152,7 +177,8 @@ async def test_cli(monkeypatch, webcap_httpserver, capsys, temp_dir):
     assert "dom" in json_out
     assert "image_base64" not in json_out
     assert "scripts" not in json_out
-    assert not any("body" in n for n in json_out["network_history"])
+    assert "requests" not in json_out
+    assert "responses" not in json_out
     parsed_dom = normalize_html(json_out.pop("dom", ""))
     assert parsed_dom == parsed_rendered
 
@@ -163,16 +189,7 @@ async def test_cli(monkeypatch, webcap_httpserver, capsys, temp_dir):
     assert nav_history[0]["mimeType"] == "text/html"
 
     network_history = json_out.pop("network_history", [])
-    assert len(network_history) == 3
-    assert network_history[0]["url"] == url
-    assert network_history[0]["status"] == 200
-    assert network_history[0]["mimeType"] == "text/html"
-    assert network_history[1]["url"] == webcap_httpserver.url_for("/js.js")
-    assert network_history[1]["status"] == 200
-    assert network_history[1]["mimeType"] == "application/javascript"
-    assert network_history[2]["url"] == webcap_httpserver.url_for("/favicon.ico")
-    assert network_history[2]["status"] == 500
-    assert network_history[2]["mimeType"] == "text/plain"
+    assert len(network_history) == 0
 
     perception_hash = json_out.pop("perception_hash", "")
     assert perception_hash.startswith("830")
@@ -194,7 +211,8 @@ async def test_cli(monkeypatch, webcap_httpserver, capsys, temp_dir):
     assert "dom" not in json_out
     assert "image_base64" not in json_out
     assert "scripts" in json_out
-    assert not any("body" in n for n in json_out["network_history"])
+    assert "requests" not in json_out
+    assert "responses" not in json_out
     assert len(json_out["scripts"]) == 2
 
     # Base64 blob
@@ -207,7 +225,8 @@ async def test_cli(monkeypatch, webcap_httpserver, capsys, temp_dir):
     assert "dom" not in json_out
     assert "image_base64" in json_out
     assert "scripts" not in json_out
-    assert not any("body" in n for n in json_out["network_history"])
+    assert "requests" not in json_out
+    assert "responses" not in json_out
 
     # Network responses
     monkeypatch.setattr(
@@ -219,8 +238,19 @@ async def test_cli(monkeypatch, webcap_httpserver, capsys, temp_dir):
     assert "dom" not in json_out
     assert "image_base64" not in json_out
     assert "scripts" not in json_out
-    assert all("body" in n for n in json_out["network_history"])
-    assert len(json_out["network_history"]) == 3
+    assert "requests" not in json_out
+    assert "responses" in json_out
+    assert "requests" not in json_out
+    assert "responses" in json_out
+    responses = json_out["responses"]
+    assert len(responses) == 3
+    assert [r["status"] for r in responses] == [200, 200, 500]
+    assert [r["type"] for r in responses] == ["Document", "Script", "Other"]
+    assert [r["url"] for r in responses] == [
+        webcap_httpserver.url_for("/"),
+        webcap_httpserver.url_for("/js.js"),
+        webcap_httpserver.url_for("/favicon.ico"),
+    ]
 
     # sanitize_filename
     from webcap.helpers import sanitize_filename
@@ -242,7 +272,14 @@ async def test_cli(monkeypatch, webcap_httpserver, capsys, temp_dir):
         "delay": 3.0,
         "dom": False,
         "full_page": False,
+        "ignored_types": [
+            "Image",
+            "Media",
+            "Font",
+            "Stylesheet",
+        ],
         "javascript": False,
+        "requests": False,
         "responses": False,
         "base64": False,
         "threads": 15,

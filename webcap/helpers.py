@@ -192,3 +192,7 @@ def in_exception_chain(e, exc_types):
 
 def is_cancellation(e):
     return in_exception_chain(e, (KeyboardInterrupt, asyncio.CancelledError))
+
+
+def repr_params(params):
+    return f"{', '.join(f'{k}={repr(v)}' for k, v in params.items())}"

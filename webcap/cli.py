@@ -3,7 +3,6 @@
 import sys
 import orjson
 import uvloop
-import asyncio
 import logging
 import argparse
 from pathlib import Path
@@ -17,7 +16,7 @@ ascii_art = r""" [1;38;5;196m         ___..._[0m
  [1;38;5;197m    _,--'       "`-.[0m
  [1;38;5;198m  ,'.  .            \[0m
  [1;38;5;199m,/: __...--'''''---..|[0m
- [1;38;5;200m|;'`  ＼ \ | / ／ _.-'[0m      __     __    ______
+ [1;38;5;200m|;'`   ＼\ | /／ _.-'[0m       __     __    ______
  [1;38;5;201m`--:...-,-'""\[0m     | |     / /__  / /_  / ____/__ ______ 
  [1;38;5;165m        |:.  `.[0m    | | /| / / _ \/ __ \/ /   / __' / __ \
  [1;38;5;129m        l;.   l[0m    | |/ |/ /  __/ /_/ / /___/ /_/ / /_/ /
@@ -62,6 +61,12 @@ async def _cli():
     output_options.add_argument(
         "-f", "--full-page", action="store_true", help="Capture the full page (larger resolution images)"
     )
+    output_options.add_argument(
+        "--ignore-types",
+        nargs="+",
+        default=defaults.ignored_types,
+        help=f"Ignore certain types of network requests (default: {', '.join(defaults.ignored_types)})",
+    )
 
     performance_options = parser.add_argument_group("Performance")
     performance_options.add_argument(
@@ -86,10 +91,16 @@ async def _cli():
     json_options.add_argument("-j", "--json", action="store_true", help="Output JSON")
     json_options.add_argument("-d", "--dom", action="store_true", help="Capture the fully-rendered DOM")
     json_options.add_argument(
-        "-R",
+        "-Rs",
         "--responses",
         action="store_true",
-        help="Capture the full body of each response (including API calls etc.)",
+        help="Capture the full body of each HTTP response (including API calls etc.)",
+    )
+    json_options.add_argument(
+        "-Rq",
+        "--requests",
+        action="store_true",
+        help="Capture the full body of each HTTP request (including API calls etc.)",
     )
     json_options.add_argument(
         "-J", "--javascript", action="store_true", help="Capture every snippet of Javascript (inline + external)"
@@ -164,7 +175,7 @@ async def _main():
     except BaseException as e:
         if is_cancellation(e):
             sys.exit(1)
-        else:
+        elif not isinstance(e, SystemExit):
             import traceback
 
             log.critical(f"Unhandled error: {e}")

@@ -16,7 +16,7 @@ from webcap.tab import Tab
 from webcap import defaults
 from webcap.base import WebCapBase
 from webcap.errors import DevToolsProtocolError, WebCapError
-from webcap.helpers import task_pool, get_keyword_args  # , download_wap
+from webcap.helpers import task_pool, get_keyword_args, repr_params  # , download_wap
 
 
 class Browser(WebCapBase):
@@ -50,8 +50,10 @@ class Browser(WebCapBase):
         full_page=False,
         dom=False,
         javascript=False,
+        requests=False,
         responses=False,
         base64=False,
+        ignored_types=defaults.ignored_types,
     ):
         super().__init__()
         atexit.register(self.cleanup)
@@ -68,9 +70,11 @@ class Browser(WebCapBase):
         self.user_agent = user_agent
         self.full_page_capture = full_page
         self.capture_javascript = javascript
+        self.capture_requests = requests
         self.capture_responses = responses
         self.capture_base64 = base64
         self.capture_dom = dom
+        self.ignored_types = ignored_types
         self.resolution = str(resolution)
         self.resolution = [int(x) for x in self.resolution.split("x")]
         x, y = self.resolution
@@ -131,9 +135,6 @@ class Browser(WebCapBase):
         # await self.request("Network.setRequestInterception", patterns=[{"urlPattern": "*"}])
 
     async def handle_event(self, event):
-        # import json
-
-        # print(json.dumps(event, indent=2))
         # Handle response to a specific request
         if "id" in event:
             message_id = event["id"]
@@ -167,14 +168,32 @@ class Browser(WebCapBase):
         else:
             self.log.error(f"Unknown message: {event}")
 
-    async def request(self, command, sessionId=None, **params):
-        request, future = await self._build_request(command, **params)
-        if sessionId:
-            request["sessionId"] = sessionId
-        await self._send_request(request)
-        return await future
+    async def request(self, command, sessionId=None, retry=False, **params):
+        retries = 1
+        retry_delay = 0.1
+        # 7 iterations w/ exponential backoff == max retry delay of 6.4 seconds
+        if retry:
+            retries = 7
+        error = None
+        for _ in range(retries):
+            message_id = await self._next_message_id()
+            try:
+                future = asyncio.Future()
+                self.pending_requests[message_id] = future
+                request = await self._build_request(command, message_id, **params)
+                if sessionId:
+                    request["sessionId"] = sessionId
+                await self._send_request(request)
+                return await future
+            except DevToolsProtocolError as e:
+                self.pending_requests.pop(message_id, None)
+                error = DevToolsProtocolError(f"Error sending command: {command}({repr_params(params)}): {e}")
+                self.log.info(error)
+                await asyncio.sleep(retry_delay)
+                retry_delay *= 2
+        raise error
 
-    async def _build_request(self, command, **params):
+    async def _build_request(self, command, message_id, **params):
         # make sure command is supported
         domain, subcommand = command.split(".")
         if domain not in self._commands:
@@ -187,11 +206,8 @@ class Browser(WebCapBase):
                 f"command {subcommand} not supported for domain {domain} (supported commands: {','.join(supported_commands)})"
             )
 
-        future = asyncio.Future()
-        message_id = await self._next_message_id()
-        self.pending_requests[message_id] = future
         request = {"id": message_id, "method": command, "params": params}
-        return request, future
+        return request
 
     async def _send_request(self, request):
         if self.websocket is None:
@@ -290,16 +306,19 @@ class Browser(WebCapBase):
             self.log.critical(f"Error in message handler: {e}")
             import traceback
 
-            traceback.print_exc()
+            self.log.critical(traceback.format_exc())
         finally:
-            self._closed = True
+            await self.stop()
 
     async def stop(self):
-        self.log.info("STOPPING BROWSER")
-        if self.websocket:
-            await self.websocket.close()
-        if self.chrome_process:
-            self.chrome_process.terminate()
+        if not self._closed:
+            self.log.info("STOPPING BROWSER")
+            if self.websocket:
+                with suppress(Exception):
+                    await self.websocket.close()
+            if self.chrome_process:
+                with suppress(Exception):
+                    self.chrome_process.terminate()
         self._closed = True
 
     def cleanup(self):

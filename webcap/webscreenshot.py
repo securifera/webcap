@@ -3,6 +3,7 @@ import base64
 import asyncio
 import imagehash
 from PIL import Image
+from contextlib import suppress
 from urllib.parse import urlparse
 
 from webcap.base import WebCapBase
@@ -20,14 +21,13 @@ class WebScreenshot(WebCapBase):
         self.url = None
         self.title = ""
         self.navigation_history = []
-        self.network_history = []
         self.dom = None
         self.scripts = set()
         self._blob = None
         self._perception_hash = None
-        self._request_ids = set()
-        self._semaphore = asyncio.Semaphore(25)
-        self._done_condition = asyncio.Condition()
+
+        # holds the request id and data for each request/response
+        self._requests = {}
 
     @property
     def hostname(self):
@@ -57,9 +57,8 @@ class WebScreenshot(WebCapBase):
         return sanitize_filename(self.url) + ".png"
 
     async def json(self):
-        # wait until nothing is using self._semaphore
-        async with self._done_condition:
-            await self._done_condition.wait_for(lambda: self._semaphore._value == 25)
+        # before we jsonify, wait until our tab is finished processing
+        await self.tab.wait_for_finish()
 
         loop = asyncio.get_running_loop()
         perception_hash = await loop.run_in_executor(self.tab.browser._process_pool, self.perception_hash, self.blob)
@@ -69,7 +68,6 @@ class WebScreenshot(WebCapBase):
             "title": self.title,
             "status_code": self.status_code,
             "navigation_history": self.navigation_history,
-            "network_history": self.network_history,
             "perception_hash": perception_hash,
         }
         if self.tab.browser.capture_base64:
@@ -78,50 +76,47 @@ class WebScreenshot(WebCapBase):
             j["dom"] = self.dom
         if self.tab.browser.capture_javascript:
             j["scripts"] = [script.json for script in self.scripts]
+        if self.tab.browser.capture_responses:
+            j["responses"] = self.responses
+        if self.tab.browser.capture_requests:
+            j["requests"] = self.requests
         return j
 
     def add_javascript(self, raw_text, url=None):
         self.scripts.add(JavaScript(self, raw_text, url))
 
-    async def add_history(self, response, request_id, response_type):
-        async with self._semaphore:
-            url = response.get("url", "")
-            history_item = {
-                "url": url,
-                "status": response.get("status", 0),
-                "statusText": response.get("statusText", ""),
-                "headers": response.get("headers", {}),
-                "mimeType": response.get("mimeType", ""),
-                "charset": response.get("charset", ""),
-                "remoteIPAddress": response.get("remoteIPAddress", ""),
-                "remotePort": response.get("remotePort", 0),
-            }
-            navigation_item = dict(history_item)
+    def get_request_obj(self, request_id, request_type):
+        try:
+            return self._requests[request_id]
+        except KeyError:
+            request_obj = {"type": request_type}
+            self._requests[request_id] = request_obj
 
-            # capture the response body if requested
-            if self.tab.browser.capture_responses and not request_id in self._request_ids:
-                self._request_ids.add(request_id)
-                # the response body isn't always available right away, so we retry a few times if needed
-                success = False
-                retry_delay = 0.1
-                # 6 iterations == max retry delay of 6.4 seconds
-                for i in range(6):
-                    try:
-                        response_body = await self.tab.request("Network.getResponseBody", requestId=request_id)
-                        history_item["body"] = response_body.get("body", "")
-                        success = True
-                        break
-                    except DevToolsProtocolError as e:
-                        self.log.info(f"Error getting response body: {e}, retrying...")
-                        await asyncio.sleep(retry_delay)
-                        retry_delay *= 2
-                if not success:
-                    self.log.error(f"Failed to get response body for {url}")
+    @property
+    def network_history(self):
+        return list(self._requests.values())
 
-            self.network_history.append(history_item)
-            # if the response came from the main page, add it to the navigation history
-            if response_type in ("Document", "redirectResponse"):
-                self.navigation_history.append(navigation_item)
+    @property
+    def requests(self):
+        ret = []
+        for request in self._requests.values():
+            request_type = request.get("type", "Other")
+            for request_item in request.get("requests", []):
+                request_item = dict(request_item)
+                request_item["type"] = request_type
+                ret.append(request_item)
+        return ret
+
+    @property
+    def responses(self):
+        ret = []
+        for request in self._requests.values():
+            request_type = request.get("type", "Other")
+            for response_item in request.get("responses", []):
+                response_item = dict(response_item)
+                response_item["type"] = request_type
+                ret.append(response_item)
+        return ret
 
     @property
     def final_url(self):
@@ -138,7 +133,7 @@ class WebScreenshot(WebCapBase):
             return 0
 
     def __str__(self):
-        return f"WebScreenshot(status_code={self.status_code}, url={repr(self.url)}, title={repr(self.title)})"
+        return f"WebScreenshot(url={repr(self.url)}, status_code={self.status_code}, title={repr(self.title)})"
 
     def __repr__(self):
         return str(self)
