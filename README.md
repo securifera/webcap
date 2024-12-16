@@ -14,6 +14,10 @@ pipx install webcap
 
 WebCap's most unique feature is its ability to capture not only the **fully-rendered DOM**, but also every snippet of **parsed Javascript** (regardless of inline or external), and the **full content** of every HTTP request + response (including Javascript API calls etc.). For convenience, it outputs directly to JSON:
 
+#### Screenshots
+
+![image](https://github.com/user-attachments/assets/c5a409ea-d068-45d7-a4c1-8a8cddf6c491)
+
 #### Fully-rendered DOM
 
 ![image](https://github.com/user-attachments/assets/60dd2a80-f9c3-438e-8f00-f982c356625d)
