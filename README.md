@@ -1,4 +1,4 @@
-<img src="https://github.com/user-attachments/assets/1cab9ac6-01d8-40dc-a3d4-79127efdbf1b" width="600"/>
+<img src="https://github.com/user-attachments/assets/25912aba-690a-45e2-a6a9-2b0445e8218f" width="600"/>
 
 [![Python Version](https://img.shields.io/badge/python-3.9+-8400ff)](https://www.python.org) [![License](https://img.shields.io/badge/license-GPLv3-8400ff.svg)](https://github.com/blacklanternsecurity/webcap/blob/dev/LICENSE) [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff) [![Tests](https://github.com/blacklanternsecurity/webcap/actions/workflows/tests.yml/badge.svg?branch=stable)](https://github.com/blacklanternsecurity/webcap/actions?query=workflow%3A"tests") [![Codecov](https://codecov.io/gh/blacklanternsecurity/webcap/branch/dev/graph/badge.svg?token=IR5AZBDM5K)](https://codecov.io/gh/blacklanternsecurity/webcap) [![Discord](https://img.shields.io/discord/859164869970362439)](https://discord.com/invite/PZqkgxu5SA)
 
@@ -8,7 +8,7 @@
 pipx install webcap
 ```
 
-WebCap's most unique feature is its ability to capture not only the **fully-rendered DOM**, but also every snippet of **parsed Javascript** (regardless of inline or external), and the **full response body** of every HTTP request. For convenience, it outputs directly to JSON:
+WebCap's most unique feature is its ability to capture not only the **fully-rendered DOM**, but also every snippet of **parsed Javascript** (regardless of inline or external), and the **full content** of every HTTP request + response (including Javascript API calls etc.). For convenience, it outputs directly to JSON:
 
 ### Fully-rendered DOM
 
@@ -16,15 +16,20 @@ WebCap's most unique feature is its ability to capture not only the **fully-rend
 
 ### Javascript Capture
 
-![image](https://github.com/user-attachments/assets/9360ea5c-bed7-4ede-94a1-49e093bf84e9)
+![image](https://github.com/user-attachments/assets/6f960bbb-efb6-4294-a1f2-2c6181baa31a)
 
 ### Requests + Responses
 
+![image](https://github.com/user-attachments/assets/0f036384-a465-4579-b70a-b567daaa8113)
 
+### OCR
+
+![image](https://github.com/user-attachments/assets/cffb268e-8b9b-490c-8949-39e73e73aa8a)
 
 ### All features:
 
 - [x] Blazing fast screenshots
+- [x] Fullscreen capture (entire scrollable page)
 - [x] JSON output
 - [x] Full DOM extraction
 - [x] Javascript extraction (inline + external)
@@ -34,8 +39,7 @@ WebCap's most unique feature is its ability to capture not only the **fully-rend
 - [x] Title
 - [x] Fuzzy hashing
 - [ ] Technology detection
-- [ ] OCR text extraction
-- [x] Full network logs
+- [x] OCR text extraction
 
 ## Example Usage - CLI
 
@@ -70,21 +74,22 @@ if __name__ == "__main__":
 ## CLI Usage (--help)
 
 ```
-usage: webcap [-h] [-u URLS [URLS ...]] [-o OUTPUT] [-r RESOLUTION] [-f] [-t THREADS]
-              [--delay DELAY] [-U USER_AGENT] [-H HEADERS [HEADERS ...]] [-p PROXY]
-              [-b] [-j] [-d] [-Rs] [-Rq] [-J] [-s] [--debug] [--no-color] [-c CHROME]
+usage: webcap [-h] [-u URLS [URLS ...]] [-o OUTPUT] [-j] [-r RESOLUTION] [-f] [--no-screenshots] [-t THREADS] [--delay DELAY] [-U USER_AGENT] [-H HEADERS [HEADERS ...]] [-p PROXY] [-b]
+              [-d] [-rs] [-rq] [-J] [--ignore-types IGNORE_TYPES [IGNORE_TYPES ...]] [--ocr] [-s] [--debug] [--no-color] [-c CHROME]
 
 options:
   -h, --help            show this help message and exit
   -u URLS [URLS ...], --urls URLS [URLS ...]
                         URL(s) to capture, or file(s) containing URLs
-
-Output:
   -o OUTPUT, --output OUTPUT
                         Output directory
+  -j, --json            Output JSON
+
+Screenshots:
   -r RESOLUTION, --resolution RESOLUTION
                         Resolution to capture
   -f, --full-page       Capture the full page (larger resolution images)
+  --no-screenshots      Don't take screenshots
 
 Performance:
   -t THREADS, --threads THREADS
@@ -95,20 +100,19 @@ HTTP:
   -U USER_AGENT, --user-agent USER_AGENT
                         User agent to use
   -H HEADERS [HEADERS ...], --headers HEADERS [HEADERS ...]
-                        Additional headers to send in format: 'Header-Name: Header-
-                        Value' (multiple supported)
+                        Additional headers to send in format: 'Header-Name: Header-Value' (multiple supported)
   -p PROXY, --proxy PROXY
                         HTTP proxy to use
 
 JSON Output:
   -b, --base64          Output each screenshot as base64
-  -j, --json            Output JSON
   -d, --dom             Capture the fully-rendered DOM
-  -Rs, --responses      Capture the full body of each HTTP response (including API
-                        calls etc.)
-  -Rq, --requests       Capture the full body of each HTTP request (including API
-                        calls etc.)
+  -rs, --responses      Capture the full body of each HTTP response (including API calls etc.)
+  -rq, --requests       Capture the full body of each HTTP request (including API calls etc.)
   -J, --javascript      Capture every snippet of Javascript (inline + external)
+  --ignore-types IGNORE_TYPES [IGNORE_TYPES ...]
+                        Ignore certain types of network requests (default: Image, Media, Font, Stylesheet)
+  --ocr                 Extract text from screenshots
 
 Misc:
   -s, --silent          Silent mode

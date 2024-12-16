@@ -3,13 +3,11 @@ import base64
 import asyncio
 import imagehash
 from PIL import Image
-from contextlib import suppress
 from urllib.parse import urlparse
 
 from webcap.base import WebCapBase
 from webcap.javascript import JavaScript
 from webcap.helpers import sanitize_filename
-from webcap.errors import DevToolsProtocolError
 
 
 class WebScreenshot(WebCapBase):
@@ -75,15 +73,18 @@ class WebScreenshot(WebCapBase):
         if self.tab.browser.capture_dom:
             j["dom"] = self.dom
         if self.tab.browser.capture_javascript:
-            j["scripts"] = [script.json for script in self.scripts]
+            j["javascript"] = [script.json for script in self.scripts]
         if self.tab.browser.capture_responses:
             j["responses"] = self.responses
         if self.tab.browser.capture_requests:
             j["requests"] = self.requests
+        if self.tab.browser.capture_ocr:
+            ocr_text = await self.ocr()
+            j["ocr"] = ocr_text
         return j
 
-    def add_javascript(self, raw_text, url=None):
-        self.scripts.add(JavaScript(self, raw_text, url))
+    def add_javascript(self, script, url=None):
+        self.scripts.add(JavaScript(self, script, url))
 
     def get_request_obj(self, request_id, request_type):
         try:
@@ -91,6 +92,16 @@ class WebScreenshot(WebCapBase):
         except KeyError:
             request_obj = {"type": request_type}
             self._requests[request_id] = request_obj
+            return request_obj
+
+    async def ocr(self):
+        loop = asyncio.get_running_loop()
+        ocr_text = await loop.run_in_executor(None, self._get_ocr_text, self.blob)
+        return ocr_text
+
+    def _get_ocr_text(self, blob):
+        result, _ = self.tab.browser.extractous.extract_bytes_to_string(bytearray(blob))
+        return result
 
     @property
     def network_history(self):

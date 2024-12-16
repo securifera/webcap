@@ -19,7 +19,7 @@ def temp_dir():
     tempdir = Path(tempfile.gettempdir()) / ".webcap-test"
     tempdir.mkdir(parents=True, exist_ok=True)
     yield tempdir
-    shutil.rmtree(tempdir)
+    shutil.rmtree(tempdir, ignore_errors=True)
 
 
 @pytest.fixture
@@ -51,6 +51,10 @@ def webcap_httpserver(make_httpserver):
     # javascript
     httpserver.expect_request("/js.js").respond_with_data(
         "console.log('hello')", headers={"Content-Type": "application/javascript"}
+    )
+    # css
+    httpserver.expect_request("/style.css").respond_with_data(
+        "body { background-color: white; }", headers={"Content-Type": "text/css"}
     )
 
     # loop until the server is ready
@@ -91,6 +95,7 @@ html_body = """
 <html>
     <head>
         <title>frankie</title>
+        <link rel="stylesheet" href="/style.css">
         <script>
             // when the page loads, add a <p> element to the body
             window.addEventListener("load", function() {
@@ -106,6 +111,7 @@ rendered_html_body = """
 <html>
     <head>
         <title>frankie</title>
+        <link rel="stylesheet" href="/style.css">
         <script>
             // when the page loads, add a <p> element to the body
             window.addEventListener("load", function() {

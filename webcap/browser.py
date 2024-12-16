@@ -34,9 +34,8 @@ class Browser(WebCapBase):
         "--remote-debugging-port=9222",
         "--headless=new",
         "--enable-automation",
+        "--ignore-certificate-errors",
         # "--site-per-process",
-        # web proxy
-        # "--proxy-server=http://127.0.0.1:8081",
     ]
 
     def __init__(
@@ -53,7 +52,8 @@ class Browser(WebCapBase):
         requests=False,
         responses=False,
         base64=False,
-        ignored_types=defaults.ignored_types,
+        ocr=False,
+        ignore_types=defaults.ignored_types,
     ):
         super().__init__()
         atexit.register(self.cleanup)
@@ -73,8 +73,12 @@ class Browser(WebCapBase):
         self.capture_requests = requests
         self.capture_responses = responses
         self.capture_base64 = base64
+        self.capture_ocr = ocr
         self.capture_dom = dom
-        self.ignored_types = ignored_types
+        if isinstance(ignore_types, str):
+            ignore_types = [ignore_types]
+        ignore_types = [t.lower() for t in ignore_types]
+        self.ignore_types = ignore_types
         self.resolution = str(resolution)
         self.resolution = [int(x) for x in self.resolution.split("x")]
         x, y = self.resolution
@@ -103,6 +107,8 @@ class Browser(WebCapBase):
         self._message_id_lock = asyncio.Lock()
         self._tab_lock = asyncio.Lock()
         self._message_handler_task = None
+
+        self._extractous = None
 
         self._process_pool = ProcessPoolExecutor()
 
@@ -343,6 +349,14 @@ class Browser(WebCapBase):
             message_id = int(self._current_message_id)
             self._current_message_id += 1
         return message_id
+
+    @property
+    def extractous(self):
+        if self._extractous is None:
+            import extractous
+
+            self._extractous = extractous.Extractor()
+        return self._extractous
 
     # async def get_wap_session(self):
     #     # wait for chrome extension to come online (100 iterations == 10 seconds)

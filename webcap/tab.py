@@ -99,8 +99,8 @@ class Tab(WebCapBase):
                 await self.add_javascript(params)
 
     async def add_request(self, request):
-        request_type = request.get("type", "Unknown")
-        if request_type in self.browser.ignored_types:
+        request_type = request.get("type", "Unknown").lower()
+        if request_type in self.browser.ignore_types:
             self.log.debug(f"Ignoring request type: {request_type}")
             return
 
@@ -123,11 +123,11 @@ class Tab(WebCapBase):
             if not request_id:
                 raise DevToolsProtocolError(f"No requestId found in response: {response}")
         if response_type is None:
-            response_type = response.get("type", "")
+            response_type = response.get("type", "").lower()
             if not response_type:
                 raise DevToolsProtocolError(f"No response type found in response: {response}")
 
-        if response_type in self.browser.ignored_types:
+        if response_type in self.browser.ignore_types:
             self.log.debug(f"Ignoring response type: {response_type}")
             return
 
@@ -171,7 +171,7 @@ class Tab(WebCapBase):
             except KeyError:
                 request_obj["responses"] = [history_item]
 
-        if response_type == "Document" and not "":
+        if response_type == "document" and not "":
             self.webscreenshot.navigation_history.append(nav_item)
 
     async def add_javascript(self, params):
