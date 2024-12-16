@@ -4,31 +4,15 @@
 
 **WebCap** is an extremely lightweight headless browser tool. It doesn't require Selenium, Playwright, Puppeteer, or any other browser automation framework; all it needs is a working Chrome installation.
 
-WebCap's most unique feature is its ability to capture not only the **fully-rendered DOM**, but also every snippet of **parsed Javascript** (regardless of inline or external), and the **full content** of every HTTP request + response (including Javascript API calls etc.). For convenience, it outputs directly to JSON.
-
 ### Installation
 
 ```bash
 pipx install webcap
 ```
 
-### Fully-rendered DOM
+### Features
 
-![image](https://github.com/user-attachments/assets/60dd2a80-f9c3-438e-8f00-f982c356625d)
-
-### Javascript Capture
-
-![image](https://github.com/user-attachments/assets/6f960bbb-efb6-4294-a1f2-2c6181baa31a)
-
-### Requests + Responses
-
-![image](https://github.com/user-attachments/assets/0f036384-a465-4579-b70a-b567daaa8113)
-
-### OCR
-
-![image](https://github.com/user-attachments/assets/cffb268e-8b9b-490c-8949-39e73e73aa8a)
-
-### Features:
+WebCap's most unique feature is its ability to capture not only the **fully-rendered DOM**, but also every snippet of **parsed Javascript** (regardless of inline or external), and the **full content** of every HTTP request + response (including Javascript API calls etc.). For convenience, it outputs directly to JSON.
 
 - [x] Blazing fast screenshots
 - [x] Fullscreen capture (entire scrollable page)
@@ -43,6 +27,22 @@ pipx install webcap
 - [ ] Technology detection
 - [x] OCR text extraction
 - [ ] Web interface
+
+#### Fully-rendered DOM
+
+![image](https://github.com/user-attachments/assets/60dd2a80-f9c3-438e-8f00-f982c356625d)
+
+#### Javascript Capture
+
+![image](https://github.com/user-attachments/assets/6f960bbb-efb6-4294-a1f2-2c6181baa31a)
+
+#### Requests + Responses
+
+![image](https://github.com/user-attachments/assets/0f036384-a465-4579-b70a-b567daaa8113)
+
+#### OCR
+
+![image](https://github.com/user-attachments/assets/cffb268e-8b9b-490c-8949-39e73e73aa8a)
 
 ## Example Usage - CLI
 
