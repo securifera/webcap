@@ -10,6 +10,12 @@
 pipx install webcap
 ```
 
+## Example Usage - CLI
+
+```bash
+webcap -u urls.txt -o ./my_screenshots
+```
+
 ### Features
 
 WebCap's most unique feature is its ability to capture not only the **fully-rendered DOM**, but also every snippet of **parsed Javascript** (regardless of inline or external), and the **full content** of every HTTP request + response (including Javascript API calls etc.). For convenience, it outputs directly to JSON.
@@ -43,12 +49,6 @@ WebCap's most unique feature is its ability to capture not only the **fully-rend
 #### OCR
 
 ![image](https://github.com/user-attachments/assets/cffb268e-8b9b-490c-8949-39e73e73aa8a)
-
-## Example Usage - CLI
-
-```bash
-webcap -u http://example.com urls.txt -o ./my_screenshots
-```
 
 ## Example Usage - Python
 
