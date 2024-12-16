@@ -43,8 +43,8 @@ WebCap's most unique feature is its ability to capture not only the **fully-rend
 - [x] Javascript extraction (inline + external)
 - [ ] Javascript extraction (environment dump)
 - [x] Full network logs (incl. request/response bodies)
-- [x] Status code
 - [x] Title
+- [x] Status code
 - [x] Fuzzy (perception) hashing
 - [ ] Technology detection
 - [x] OCR text extraction
