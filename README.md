@@ -12,21 +12,7 @@ pipx install webcap
 
 ### Features
 
-WebCap's most unique feature is its ability to capture not only the **fully-rendered DOM**, but also every snippet of **parsed Javascript** (regardless of inline or external), and the **full content** of every HTTP request + response (including Javascript API calls etc.). For convenience, it outputs directly to JSON.
-
-- [x] Blazing fast screenshots
-- [x] Fullscreen capture (entire scrollable page)
-- [x] JSON output
-- [x] Full DOM extraction
-- [x] Javascript extraction (inline + external)
-- [ ] Javascript extraction (environment dump)
-- [x] Full network logs (incl. request/response bodies)
-- [x] Status code
-- [x] Title
-- [x] Fuzzy (perception) hashing
-- [ ] Technology detection
-- [x] OCR text extraction
-- [ ] Web interface
+WebCap's most unique feature is its ability to capture not only the **fully-rendered DOM**, but also every snippet of **parsed Javascript** (regardless of inline or external), and the **full content** of every HTTP request + response (including Javascript API calls etc.). For convenience, it outputs directly to JSON:
 
 #### Fully-rendered DOM
 
@@ -43,6 +29,22 @@ WebCap's most unique feature is its ability to capture not only the **fully-rend
 #### OCR
 
 ![image](https://github.com/user-attachments/assets/cffb268e-8b9b-490c-8949-39e73e73aa8a)
+
+### Full feature list
+
+- [x] Blazing fast screenshots
+- [x] Fullscreen capture (entire scrollable page)
+- [x] JSON output
+- [x] Full DOM extraction
+- [x] Javascript extraction (inline + external)
+- [ ] Javascript extraction (environment dump)
+- [x] Full network logs (incl. request/response bodies)
+- [x] Status code
+- [x] Title
+- [x] Fuzzy (perception) hashing
+- [ ] Technology detection
+- [x] OCR text extraction
+- [ ] Web interface
 
 ### Examples
 
