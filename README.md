@@ -2,13 +2,13 @@
 
 [![Python Version](https://img.shields.io/badge/python-3.9+-8400ff)](https://www.python.org) [![License](https://img.shields.io/badge/license-GPLv3-8400ff.svg)](https://github.com/blacklanternsecurity/webcap/blob/dev/LICENSE) [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff) [![Tests](https://github.com/blacklanternsecurity/webcap/actions/workflows/tests.yml/badge.svg?branch=stable)](https://github.com/blacklanternsecurity/webcap/actions?query=workflow%3A"tests") [![Codecov](https://codecov.io/gh/blacklanternsecurity/webcap/branch/dev/graph/badge.svg?token=IR5AZBDM5K)](https://codecov.io/gh/blacklanternsecurity/webcap) [![Discord](https://img.shields.io/discord/859164869970362439)](https://discord.com/invite/PZqkgxu5SA)
 
-**WebCap** is an extremely lightweight headless browser tool capable of web screenshots and more. It doesn't require Selenium, Playwright, Puppeteer, or any other browser automation framework; all it needs is a working Chrome installation.
+**WebCap** is an extremely lightweight headless browser tool. It doesn't require Selenium, Playwright, Puppeteer, or any other browser automation framework; all it needs is a working Chrome installation.
+
+WebCap's most unique feature is its ability to capture not only the **fully-rendered DOM**, but also every snippet of **parsed Javascript** (regardless of inline or external), and the **full content** of every HTTP request + response (including Javascript API calls etc.). For convenience, it outputs directly to JSON.
 
 ```bash
 pipx install webcap
 ```
-
-WebCap's most unique feature is its ability to capture not only the **fully-rendered DOM**, but also every snippet of **parsed Javascript** (regardless of inline or external), and the **full content** of every HTTP request + response (including Javascript API calls etc.). For convenience, it outputs directly to JSON:
 
 ### Fully-rendered DOM
 
@@ -26,7 +26,7 @@ WebCap's most unique feature is its ability to capture not only the **fully-rend
 
 ![image](https://github.com/user-attachments/assets/cffb268e-8b9b-490c-8949-39e73e73aa8a)
 
-### All features:
+### Features:
 
 - [x] Blazing fast screenshots
 - [x] Fullscreen capture (entire scrollable page)
@@ -37,9 +37,10 @@ WebCap's most unique feature is its ability to capture not only the **fully-rend
 - [x] Full network logs (incl. request/response bodies)
 - [x] Status code
 - [x] Title
-- [x] Fuzzy hashing
+- [x] Fuzzy (perception) hashing
 - [ ] Technology detection
 - [x] OCR text extraction
+- [ ] Web interface
 
 ## Example Usage - CLI
 
