@@ -46,7 +46,7 @@ WebCap's most unique feature is its ability to capture not only the **fully-rend
 - [x] OCR text extraction
 - [ ] Web interface
 
-### Examples
+### Example Commands
 
 ```bash
 # Capture screenshots of all URLs in urls.txt
