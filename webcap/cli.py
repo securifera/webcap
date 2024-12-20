@@ -51,13 +51,20 @@ async def _cli():
     default_output_dir = Path.cwd() / "screenshots"
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("-u", "--urls", nargs="+", help="URL(s) to capture, or file(s) containing URLs")
+    parser.add_argument(
+        "-u", "--urls", nargs="+", required=True, help="URL(s) to capture, or file(s) containing URLs", metavar="URLS"
+    )
     parser.add_argument("-o", "--output", type=Path, default=default_output_dir, help="Output directory")
     parser.add_argument("-j", "--json", action="store_true", help="Output JSON")
 
     screenshot_options = parser.add_argument_group("Screenshots")
     screenshot_options.add_argument(
-        "-r", "--resolution", default=defaults.resolution, type=resolution_type, help="Resolution to capture"
+        "-r",
+        "--resolution",
+        default=defaults.resolution,
+        type=resolution_type,
+        help="Resolution to capture",
+        metavar="RESOLUTION",
     )
     screenshot_options.add_argument(
         "-f", "--full-page", action="store_true", help="Capture the full page (larger resolution images)"
@@ -66,10 +73,14 @@ async def _cli():
 
     performance_options = parser.add_argument_group("Performance")
     performance_options.add_argument(
-        "-t", "--threads", type=int, default=defaults.threads, help="Number of threads to use"
+        "-t", "--threads", type=int, default=defaults.threads, help="Number of threads to use", metavar="THREADS"
     )
     performance_options.add_argument(
-        "--delay", type=float, default=defaults.delay, help="Delay before capturing (default: 3.0 seconds)"
+        "--delay",
+        type=float,
+        default=defaults.delay,
+        help="Delay before capturing (default: 3.0 seconds)",
+        metavar="SECONDS",
     )
 
     http_options = parser.add_argument_group("HTTP")
@@ -79,6 +90,7 @@ async def _cli():
         "--headers",
         nargs="+",
         help="Additional headers to send in format: 'Header-Name: Header-Value' (multiple supported)",
+        metavar="HEADERS",
     )
     http_options.add_argument("-p", "--proxy", help="HTTP proxy to use")
 
@@ -105,6 +117,7 @@ async def _cli():
         nargs="+",
         default=defaults.ignored_types,
         help=f"Ignore certain types of network requests (default: {', '.join(defaults.ignored_types)})",
+        metavar="FILETYPES",
     )
     json_options.add_argument("--ocr", action="store_true", help="Extract text from screenshots")
 

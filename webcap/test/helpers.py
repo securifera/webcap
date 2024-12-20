@@ -15,14 +15,6 @@ log = logging.getLogger("webcap.tests")
 
 
 @pytest.fixture
-def temp_dir():
-    tempdir = Path(tempfile.gettempdir()) / ".webcap-test"
-    tempdir.mkdir(parents=True, exist_ok=True)
-    yield tempdir
-    shutil.rmtree(tempdir, ignore_errors=True)
-
-
-@pytest.fixture
 def webcap_httpserver(make_httpserver):
     httpserver = make_httpserver
     httpserver.clear()
@@ -55,6 +47,11 @@ def webcap_httpserver(make_httpserver):
     # css
     httpserver.expect_request("/style.css").respond_with_data(
         "body { background-color: white; }", headers={"Content-Type": "text/css"}
+    )
+    # image
+    httpserver.expect_request("/image.png").respond_with_data(
+        b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82",
+        headers={"Content-Type": "image/png"},
     )
 
     # loop until the server is ready
@@ -96,6 +93,7 @@ html_body = """
     <head>
         <title>frankie</title>
         <link rel="stylesheet" href="/style.css">
+        <img src="/image.png" onerror="console.log('wat')"/>
         <script>
             // when the page loads, add a <p> element to the body
             window.addEventListener("load", function() {
@@ -112,6 +110,7 @@ rendered_html_body = """
     <head>
         <title>frankie</title>
         <link rel="stylesheet" href="/style.css">
+        <img src="/image.png" onerror="console.log('wat')"/>
         <script>
             // when the page loads, add a <p> element to the body
             window.addEventListener("load", function() {
@@ -127,3 +126,11 @@ rendered_html_body = """
 </html>
 """
 parsed_rendered = normalize_html(rendered_html_body)
+
+
+@pytest.fixture
+def temp_dir():
+    tempdir = Path(tempfile.gettempdir()) / ".webcap-test"
+    tempdir.mkdir(parents=True, exist_ok=True)
+    yield tempdir
+    shutil.rmtree(tempdir, ignore_errors=True)
