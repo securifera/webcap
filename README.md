@@ -96,14 +96,15 @@ if __name__ == "__main__":
 ## CLI Usage (--help)
 
 ```
-usage: webcap [-h] [-u URLS [URLS ...]] [-o OUTPUT] [-j] [-r RESOLUTION] [-f] [--no-screenshots] [-t THREADS] [--delay DELAY] [-U USER_AGENT] [-H HEADERS [HEADERS ...]] [-p PROXY] [-b]
-              [-d] [-rs] [-rq] [-J] [--ignore-types IGNORE_TYPES [IGNORE_TYPES ...]] [--ocr] [-s] [--debug] [--no-color] [-c CHROME]
+usage: webcap [-h] -u URLS [URLS ...] [-o OUTPUT_DIR] [-j] [-r RESOLUTION] [-f] [--no-screenshots] [-t THREADS] [--delay SECONDS]
+              [-U USER_AGENT] [-H HEADERS [HEADERS ...]] [-p PROXY] [-b] [-d] [-rs] [-rq] [-J] [--ignore-types FILETYPES [FILETYPES ...]]
+              [--ocr] [-s] [--debug] [--no-color] [-c CHROME]
 
 options:
   -h, --help            show this help message and exit
   -u URLS [URLS ...], --urls URLS [URLS ...]
                         URL(s) to capture, or file(s) containing URLs
-  -o OUTPUT, --output OUTPUT
+  -o OUTPUT_DIR, --output OUTPUT_DIR
                         Output directory
   -j, --json            Output JSON
 
@@ -116,7 +117,7 @@ Screenshots:
 Performance:
   -t THREADS, --threads THREADS
                         Number of threads to use
-  --delay DELAY         Delay before capturing (default: 3.0 seconds)
+  --delay SECONDS       Delay before capturing (default: 3.0 seconds)
 
 HTTP:
   -U USER_AGENT, --user-agent USER_AGENT
@@ -132,7 +133,7 @@ JSON Output:
   -rs, --responses      Capture the full body of each HTTP response (including API calls etc.)
   -rq, --requests       Capture the full body of each HTTP request (including API calls etc.)
   -J, --javascript      Capture every snippet of Javascript (inline + external)
-  --ignore-types IGNORE_TYPES [IGNORE_TYPES ...]
+  --ignore-types FILETYPES [FILETYPES ...]
                         Ignore certain types of network requests (default: Image, Media, Font, Stylesheet)
   --ocr                 Extract text from screenshots
 

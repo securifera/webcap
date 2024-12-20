@@ -89,6 +89,7 @@ def sanitize_filename(filename):
     filename = sub_regex.sub("-", filename)
     # collapse multiple underscores
     filename = sub_regex_multiple.sub("-", filename)
+    filename = truncate_filename(filename)
     return filename
 
 
@@ -219,7 +220,7 @@ def truncate_filename(file_path, max_length=255):
     p = Path(file_path)
     directory, stem, suffix = p.parent, p.stem, p.suffix
 
-    max_filename_length = max_length - len(str(directory)) - len(suffix) - 1  # 1 for the '/' separator
+    max_filename_length = max_length - len(suffix)
 
     if max_filename_length <= 0:
         raise ValueError("The directory path is too long to accommodate any filename within the limit.")

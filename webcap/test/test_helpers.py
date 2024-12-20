@@ -83,8 +83,13 @@ async def test_helpers(temp_dir):
     with pytest.raises(OSError):
         with open(super_long_filename, "w") as f:
             f.write("wat")
+    truncated_filename = truncate_filename(super_long_filename, 256)
+    assert truncated_filename.name == "a" * 252 + ".txt"
+    with pytest.raises(OSError):
+        with open(truncated_filename, "w") as f:
+            f.write("wat")
     truncated_filename = truncate_filename(super_long_filename)
-    assert truncated_filename.name.endswith(".txt")
+    assert truncated_filename.name == "a" * 251 + ".txt"
     with open(truncated_filename, "w") as f:
         f.write("wat")
     truncated_filename.unlink()

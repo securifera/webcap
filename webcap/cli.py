@@ -54,7 +54,9 @@ async def _cli():
     parser.add_argument(
         "-u", "--urls", nargs="+", required=True, help="URL(s) to capture, or file(s) containing URLs", metavar="URLS"
     )
-    parser.add_argument("-o", "--output", type=Path, default=default_output_dir, help="Output directory")
+    parser.add_argument(
+        "-o", "--output", type=Path, default=default_output_dir, help="Output directory", metavar="OUTPUT_DIR"
+    )
     parser.add_argument("-j", "--json", action="store_true", help="Output JSON")
 
     screenshot_options = parser.add_argument_group("Screenshots")
@@ -73,7 +75,7 @@ async def _cli():
 
     performance_options = parser.add_argument_group("Performance")
     performance_options.add_argument(
-        "-t", "--threads", type=int, default=defaults.threads, help="Number of threads to use", metavar="THREADS"
+        "-t", "--threads", type=int, default=defaults.threads, help="Number of threads to use"
     )
     performance_options.add_argument(
         "--delay",
@@ -90,7 +92,6 @@ async def _cli():
         "--headers",
         nargs="+",
         help="Additional headers to send in format: 'Header-Name: Header-Value' (multiple supported)",
-        metavar="HEADERS",
     )
     http_options.add_argument("-p", "--proxy", help="HTTP proxy to use")
 
