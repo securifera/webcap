@@ -11,7 +11,7 @@ python = ">=3.9,<3.13"
 httpx = "^0.28.1"
 websockets = "^14.1"
 orjson = "^3.10.12"
-extractous = "^0.2.0"
+extractous = "^0.3.0"
 uvloop = "^0.21.0"
 
 [tool.poetry.scripts]
