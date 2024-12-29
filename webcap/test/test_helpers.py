@@ -35,31 +35,6 @@ async def test_helpers(temp_dir):
         == "https-example.com-8080-page2-a-asdf-20.asdf"
     )
 
-    # get_keyword_args
-    from webcap.helpers import get_keyword_args
-
-    assert get_keyword_args(Browser) == {
-        "chrome_path": None,
-        "delay": 3.0,
-        "dom": False,
-        "full_page": False,
-        "ignore_types": [
-            "Image",
-            "Media",
-            "Font",
-            "Stylesheet",
-        ],
-        "javascript": False,
-        "ocr": False,
-        "requests": False,
-        "responses": False,
-        "base64": False,
-        "threads": 15,
-        "resolution": "1440x900",
-        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-        "proxy": None,
-    }
-
     # task_pool
     from webcap.helpers import task_pool
 

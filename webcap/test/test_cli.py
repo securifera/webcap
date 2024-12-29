@@ -5,13 +5,12 @@ import extractous
 from webcap.test.helpers import *
 
 
-@pytest.mark.asyncio
-async def test_cli(monkeypatch, webcap_httpserver, capsys, temp_dir):
+def test_cli(monkeypatch, webcap_httpserver, capsys, temp_dir):
     url = webcap_httpserver.url_for("/")
 
     import sys
     import json
-    from webcap.cli import _main
+    from webcap.cli import main
 
     from webcap.helpers import sanitize_filename
 
@@ -22,8 +21,8 @@ async def test_cli(monkeypatch, webcap_httpserver, capsys, temp_dir):
     shutil.rmtree(temp_dir)
 
     # basic run
-    monkeypatch.setattr(sys, "argv", ["webcap", "-u", url, "-U", "testagent", "--json", "--output", str(temp_dir)])
-    await _main()
+    monkeypatch.setattr(sys, "argv", ["webcap", "scan", url, "-U", "testagent", "--json", "--output", str(temp_dir)])
+    main()
     captured = capsys.readouterr()
     # assert "hello frank" in captured.out
     json_out = json.loads(captured.out)
@@ -57,9 +56,9 @@ async def test_cli(monkeypatch, webcap_httpserver, capsys, temp_dir):
 
     # DOM
     monkeypatch.setattr(
-        sys, "argv", ["webcap", "-u", url, "-U", "testagent", "--json", "--dom", "--output", str(temp_dir)]
+        sys, "argv", ["webcap", "scan", url, "-U", "testagent", "--json", "--dom", "--output", str(temp_dir)]
     )
-    await _main()
+    main()
     captured = capsys.readouterr()
     assert "hello frank" in captured.out
     json_out = json.loads(captured.out)
@@ -93,9 +92,9 @@ async def test_cli(monkeypatch, webcap_httpserver, capsys, temp_dir):
 
     # Javascript
     monkeypatch.setattr(
-        sys, "argv", ["webcap", "-u", url, "-U", "testagent", "--json", "--javascript", "--output", str(temp_dir)]
+        sys, "argv", ["webcap", "scan", url, "-U", "testagent", "--json", "--javascript", "--output", str(temp_dir)]
     )
-    await _main()
+    main()
     captured = capsys.readouterr()
     json_out = json.loads(captured.out)
     assert "dom" not in json_out
@@ -109,9 +108,9 @@ async def test_cli(monkeypatch, webcap_httpserver, capsys, temp_dir):
 
     # Base64 blob
     monkeypatch.setattr(
-        sys, "argv", ["webcap", "-u", url, "-U", "testagent", "--json", "--base64", "--output", str(temp_dir)]
+        sys, "argv", ["webcap", "scan", url, "-U", "testagent", "--json", "--base64", "--output", str(temp_dir)]
     )
-    await _main()
+    main()
     captured = capsys.readouterr()
     json_out = json.loads(captured.out)
     assert "dom" not in json_out
@@ -123,9 +122,9 @@ async def test_cli(monkeypatch, webcap_httpserver, capsys, temp_dir):
 
     # Network responses
     monkeypatch.setattr(
-        sys, "argv", ["webcap", "-u", url, "-U", "testagent", "--json", "--responses", "--output", str(temp_dir)]
+        sys, "argv", ["webcap", "scan", url, "-U", "testagent", "--json", "--responses", "--output", str(temp_dir)]
     )
-    await _main()
+    main()
     captured = capsys.readouterr()
     json_out = json.loads(captured.out)
     assert "dom" not in json_out
@@ -147,9 +146,9 @@ async def test_cli(monkeypatch, webcap_httpserver, capsys, temp_dir):
 
     # Network requests
     monkeypatch.setattr(
-        sys, "argv", ["webcap", "-u", url, "-U", "testagent", "--json", "--requests", "--output", str(temp_dir)]
+        sys, "argv", ["webcap", "scan", url, "-U", "testagent", "--json", "--requests", "--output", str(temp_dir)]
     )
-    await _main()
+    main()
     captured = capsys.readouterr()
     json_out = json.loads(captured.out)
     assert "dom" not in json_out
@@ -173,7 +172,7 @@ async def test_cli(monkeypatch, webcap_httpserver, capsys, temp_dir):
         "argv",
         [
             "webcap",
-            "-u",
+            "scan",
             url,
             "-U",
             "testagent",
@@ -187,7 +186,7 @@ async def test_cli(monkeypatch, webcap_httpserver, capsys, temp_dir):
             str(temp_dir),
         ],
     )
-    await _main()
+    main()
     captured = capsys.readouterr()
     json_out = json.loads(captured.out)
     assert "dom" not in json_out
@@ -218,9 +217,11 @@ async def test_cli(monkeypatch, webcap_httpserver, capsys, temp_dir):
     # Don't take screenshots
     shutil.rmtree(temp_dir, ignore_errors=True)
     monkeypatch.setattr(
-        sys, "argv", ["webcap", "-u", url, "-U", "testagent", "--json", "--no-screenshots", "--output", str(temp_dir)]
+        sys,
+        "argv",
+        ["webcap", "scan", url, "-U", "testagent", "--json", "--no-screenshots", "--output", str(temp_dir)],
     )
-    await _main()
+    main()
     captured = capsys.readouterr()
     # assert "hello frank" in captured.out
     json_out = json.loads(captured.out)
@@ -229,9 +230,9 @@ async def test_cli(monkeypatch, webcap_httpserver, capsys, temp_dir):
 
     # extract text from image
     monkeypatch.setattr(
-        sys, "argv", ["webcap", "-u", url, "-U", "testagent", "--json", "--ocr", "--output", str(temp_dir)]
+        sys, "argv", ["webcap", "scan", url, "-U", "testagent", "--json", "--ocr", "--output", str(temp_dir)]
     )
-    await _main()
+    main()
     captured = capsys.readouterr()
     # assert "hello frank" in captured.out
     json_out = json.loads(captured.out)

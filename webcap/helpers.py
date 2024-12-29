@@ -1,5 +1,6 @@
 import io
 import re
+import sys
 import time
 import httpx
 import shutil
@@ -86,24 +87,12 @@ def sanitize_filename(filename):
     """
     Sanitizes a filename by replacing non-alphanumeric characters with underscores.
     """
+    filename = str(filename)
     filename = sub_regex.sub("-", filename)
     # collapse multiple underscores
     filename = sub_regex_multiple.sub("-", filename)
-    filename = truncate_filename(filename)
+    filename = str(truncate_filename(filename))
     return filename
-
-
-def get_keyword_args(fn):
-    """
-    Inspects a function and returns a dictionary of keyword arguments.
-    """
-    signature = inspect.signature(fn)
-    keyword_args = {
-        name: param.default
-        for name, param in signature.parameters.items()
-        if param.default is not param.empty and name != "self"
-    }
-    return keyword_args
 
 
 # async def download_wap(chrome_version, output_dir):
