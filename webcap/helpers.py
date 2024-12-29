@@ -91,7 +91,7 @@ def sanitize_filename(filename):
     filename = sub_regex.sub("-", filename)
     # collapse multiple underscores
     filename = sub_regex_multiple.sub("-", filename)
-    filename = str(truncate_filename(filename))
+    filename = str(truncate_filename(filename, 240))
     return filename
 
 
@@ -221,3 +221,18 @@ def truncate_filename(file_path, max_length=255):
 
     new_path = directory / (truncated_stem + suffix)
     return new_path
+
+
+def color_status_code(status_code):
+    status_code = str(status_code)
+    if status_code == "404":
+        color = "white"
+    elif status_code.startswith("2"):
+        color = "bright_green"
+    elif status_code.startswith("3"):
+        color = "purple"
+    elif status_code.startswith("4"):
+        color = "red"
+    else:
+        color = "orange1"
+    return f"[bold {color}]{status_code}[/bold {color}]"

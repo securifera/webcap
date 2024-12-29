@@ -2,6 +2,7 @@
 
 import os
 import sys
+import time
 import typer
 import orjson
 import uvloop
@@ -10,9 +11,12 @@ import argparse
 from pathlib import Path
 from typing import Annotated
 from contextlib import suppress
+from rich.console import Console
+
 from webcap import defaults
 from webcap.browser import Browser
-from webcap.helpers import str_or_file_list, validate_urls
+from webcap.errors import ScreenshotDirError
+from webcap.helpers import str_or_file_list, validate_urls, is_cancellation, color_status_code
 
 
 ascii_art = r""" [1;38;5;196m         ___..._[0m
@@ -29,14 +33,8 @@ ascii_art = r""" [1;38;5;196m         ___..._[0m
 """
 
 
-END = "\033[0m"
-BOLD = "\033[1m"
-GREEN = "\033[38;5;47m"
-BLUE = "\033[38;5;39m"
-PURPLE = "\033[38;5;177m"
-RED = "\033[38;5;196m"
-
-
+stdout = Console(file=sys.stdout)
+stderr = Console(file=sys.stderr)
 log = logging.getLogger(__name__)
 
 
@@ -91,7 +89,10 @@ def server(
     import uvicorn
 
     os.environ["OUTPUT_DIR"] = str(directory)
-    uvicorn.run("webcap.server:app", host=listen_address, port=listen_port, reload=auto_reload)
+    try:
+        uvicorn.run("webcap.server:app", host=listen_address, port=listen_port, reload=auto_reload)
+    except ScreenshotDirError as e:
+        stderr.print(f"{e}")
 
 
 @app.command(help="Screenshot URLs")
@@ -220,7 +221,7 @@ def scan(
         if not shutil.which("tesseract"):
             raise argparse.ArgumentTypeError("Please install tesseract to use OCR:\n   - apt install tesseract-ocr")
 
-    # print the pretty mushroom
+    # print the mushroom
     if not global_options["silent"]:
         sys.stderr.write(ascii_art)
 
@@ -258,13 +259,60 @@ def scan(
     )
 
     async def _scan(browser):
-        # start the browser
+        index = {}
+        last_index_sync = time.time()
+        index_path = output_dir / "index.json"
+        json_dir = output_dir / "json"
+        json_dir.mkdir(parents=True, exist_ok=True)
+
+        # sync JSON index every 10 seconds
+        def sync_index(force=False):
+            nonlocal index
+            nonlocal last_index_sync
+            if force or time.time() - last_index_sync > 10:
+                with open(index_path, "wb") as f:
+                    f.write(orjson.dumps(index))
+                last_index_sync = time.time()
+
         try:
+            # start the browser
             await browser.start()
+
+            # iterate through screenshots as they're taken
             async for url, webscreenshot in browser.screenshot_urls(urls):
+                # skip failed requests
                 if webscreenshot is None or not webscreenshot.status_code:
                     log.info(f"No screenshot returned for {url} -> {webscreenshot}")
                     continue
+
+                # format the final url
+                nav_steps = len(webscreenshot.navigation_history)
+                if nav_steps == 1:
+                    final_url = webscreenshot.final_url
+                else:
+                    final_url = []
+                    for i, entry in enumerate(webscreenshot.navigation_history):
+                        final_url.append(entry["url"])
+                        if i < nav_steps - 1:
+                            status_code = color_status_code(entry["status"])
+                            final_url.append(f"-[{status_code}]->")
+
+                    final_url = " ".join(final_url)
+
+                # write screenshot to index
+                index[webscreenshot.id] = {
+                    "url": webscreenshot.url,
+                    "status_code": webscreenshot.status_code,
+                    "title": webscreenshot.title,
+                }
+                sync_index()
+
+                webscreenshot_json = await webscreenshot.json()
+
+                # write details
+                with open(json_dir / f"{webscreenshot.id}.json", "wb") as f:
+                    f.write(orjson.dumps(webscreenshot_json))
+
                 # write screenshot to file
                 if not no_screenshots:
                     output_path = output_dir / webscreenshot.filename
@@ -272,27 +320,19 @@ def scan(
                         f.write(webscreenshot.blob)
                 # write json to stdout
                 if json:
-                    webscreenshot_json = await webscreenshot.json()
-                    outline = orjson.dumps(webscreenshot_json).decode()
+                    output = orjson.dumps(webscreenshot_json).decode()
                 else:
                     # print the status code, title, and final url
                     if global_options["color"]:
-                        str_status = str(webscreenshot.status_code)
-                        if str_status.startswith("2"):
-                            color = f"{BOLD}{GREEN}"
-                        elif str_status.startswith("3"):
-                            color = f"{BOLD}{BLUE}"
-                        elif str_status.startswith("4"):
-                            color = f"{BOLD}{PURPLE}"
-                        else:
-                            color = f"{BOLD}{RED}"
-                        outline = f"[{color}{webscreenshot.status_code}{END}]\t{webscreenshot.title[:30]:<30}\t{webscreenshot.final_url}"
+                        output = f"[{color_status_code(webscreenshot.status_code)}]\t{webscreenshot.title[:30]:<30}\t{final_url}"
                     else:
-                        outline = (
+                        output = (
                             f"[{webscreenshot.status_code}]\t{webscreenshot.title[:30]:<30}\t{webscreenshot.final_url}"
                         )
-                print(outline, flush=True)
+                stdout.print(output, highlight=False, soft_wrap=True)
         finally:
+            # write the index
+            sync_index(force=True)
             # stop the browser
             with suppress(Exception):
                 await browser.stop()
@@ -301,7 +341,16 @@ def scan(
 
 
 def main():
-    app()
+    try:
+        app()
+    except BaseException as e:
+        if is_cancellation(e):
+            sys.exit(1)
+        elif isinstance(e, (argparse.ArgumentError, argparse.ArgumentTypeError)):
+            stderr.print(f"{e}\n")
+        elif not isinstance(e, SystemExit):
+            stderr.print_exception(show_locals=True)
+            sys.exit(1)
 
 
 if __name__ == "__main__":

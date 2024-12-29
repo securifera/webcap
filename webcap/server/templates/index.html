@@ -1,0 +1,50 @@
+<html>
+  <head>
+    <title>Webcap</title>
+  </head>
+  <body>
+
+    <style>
+      .screenshot-thumbnail {
+        width: 100px;
+      }
+    </style>
+
+    <table id="screenshots-table">
+      <thead>
+        <tr>
+          <th>thumbnail</th>
+          <th>Status Code</th>
+          <th>URL</th>
+          <th>Title</th>
+        </tr>
+      </thead>
+    </table>
+
+    <script>
+      // fetch index.json and store it in a variable
+      fetch("/screenshots/index.json")
+        .then(response => response.json())
+        .then(data => {
+          const index = data;
+          // loop through each key,value pair in index
+          for (const [id, value] of Object.entries(index)) {
+            // add the values to the table
+            const table = document.getElementById("screenshots-table");
+            const row = table.insertRow();
+            row.insertCell().innerHTML = `<img class="screenshot-thumbnail" src="/screenshots/${id}" alt="thumbnail" />`;
+            row.insertCell().textContent = value.status_code;
+            row.insertCell().textContent = value.title;
+            row.insertCell().textContent = value.url;
+
+            // fetch details at /screenshots/json/{id}.json
+            fetch(`/screenshots/json/${id}.json`)
+              .then(response => response.json())
+              .then(details => {
+                console.log(details);
+              });
+          }
+        });
+    </script>
+  </body>
+</html>

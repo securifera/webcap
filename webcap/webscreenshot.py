@@ -22,6 +22,7 @@ class WebScreenshot(WebCapBase):
         self.dom = None
         self.scripts = set()
         self._blob = None
+        self._ocr_text = None
         self._perception_hash = None
 
         # holds the request id and data for each request/response
@@ -47,6 +48,10 @@ class WebScreenshot(WebCapBase):
         image = Image.open(io.BytesIO(blob))
         image_hash = imagehash.phash(image)
         return str(image_hash)
+
+    @property
+    def id(self):
+        return self.filename
 
     @property
     def filename(self):
@@ -95,9 +100,10 @@ class WebScreenshot(WebCapBase):
             return request_obj
 
     async def ocr(self):
-        loop = asyncio.get_running_loop()
-        ocr_text = await loop.run_in_executor(None, self._get_ocr_text, self.blob)
-        return ocr_text
+        if self._ocr_text is None:
+            loop = asyncio.get_running_loop()
+            self._ocr_text = await loop.run_in_executor(None, self._get_ocr_text, self.blob)
+        return self._ocr_text
 
     def _get_ocr_text(self, blob):
         result, _ = self.tab.browser.extractous.extract_bytes_to_string(bytearray(blob))

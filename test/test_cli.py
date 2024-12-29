@@ -226,7 +226,7 @@ def test_cli(monkeypatch, webcap_httpserver, capsys, temp_dir):
     # assert "hello frank" in captured.out
     json_out = json.loads(captured.out)
     assert len(json_out["navigation_history"]) == 1
-    assert not temp_dir.exists()
+    assert not list(temp_dir.glob("*.png"))
 
     # extract text from image
     monkeypatch.setattr(
