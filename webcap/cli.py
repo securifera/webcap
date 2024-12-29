@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import os
 import sys
 import typer
 import orjson
@@ -11,7 +12,7 @@ from typing import Annotated
 from contextlib import suppress
 from webcap import defaults
 from webcap.browser import Browser
-from webcap.helpers import str_or_file_list, validate_urls, is_cancellation
+from webcap.helpers import str_or_file_list, validate_urls
 
 
 ascii_art = r""" [1;38;5;196m         ___..._[0m
@@ -56,7 +57,7 @@ app = typer.Typer()
 global_options = {
     "silent": False,
     "debug": False,
-    "no_color": False,
+    "color": False,
 }
 
 
@@ -64,11 +65,11 @@ global_options = {
 def _global_options(
     silent: bool = False,
     debug: bool = False,
-    no_color: bool = False,
+    color: bool = True,
 ):
     global_options["silent"] = silent
     global_options["debug"] = debug
-    global_options["no_color"] = no_color
+    global_options["color"] = color
 
 
 @app.command(help="Start the webcap HTTP server (GUI for browsing screenshots)")
@@ -82,9 +83,15 @@ def server(
     # auto reload
     auto_reload: Annotated[
         bool, typer.Option("--auto-reload", "-r", help="Auto reload the server when files change")
-    ] = True,
+    ] = False,
+    directory: Annotated[
+        Path, typer.Option("-d", "--directory", help="Directory to serve screenshots from", metavar="OUTPUT_DIR")
+    ] = default_output_dir,
 ):
-    print(listen_address, listen_port)
+    import uvicorn
+
+    os.environ["OUTPUT_DIR"] = str(directory)
+    uvicorn.run("webcap.server:app", host=listen_address, port=listen_port, reload=auto_reload)
 
 
 @app.command(help="Screenshot URLs")
@@ -269,11 +276,7 @@ def scan(
                     outline = orjson.dumps(webscreenshot_json).decode()
                 else:
                     # print the status code, title, and final url
-                    if global_options["no_color"]:
-                        outline = (
-                            f"[{webscreenshot.status_code}]\t{webscreenshot.title[:30]:<30}\t{webscreenshot.final_url}"
-                        )
-                    else:
+                    if global_options["color"]:
                         str_status = str(webscreenshot.status_code)
                         if str_status.startswith("2"):
                             color = f"{BOLD}{GREEN}"
@@ -284,6 +287,10 @@ def scan(
                         else:
                             color = f"{BOLD}{RED}"
                         outline = f"[{color}{webscreenshot.status_code}{END}]\t{webscreenshot.title[:30]:<30}\t{webscreenshot.final_url}"
+                    else:
+                        outline = (
+                            f"[{webscreenshot.status_code}]\t{webscreenshot.title[:30]:<30}\t{webscreenshot.final_url}"
+                        )
                 print(outline, flush=True)
         finally:
             # stop the browser

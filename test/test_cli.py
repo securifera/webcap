@@ -2,7 +2,7 @@ import pytest
 import shutil
 import extractous
 
-from webcap.test.helpers import *
+from test.helpers import *
 
 
 def test_cli(monkeypatch, webcap_httpserver, capsys, temp_dir):
