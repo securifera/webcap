@@ -42,8 +42,19 @@ class WebScreenshot(WebCapBase):
             self._blob = base64.b64decode(self.base64)
         return self._blob
 
+    async def perception_hash(self):
+        if self._perception_hash is None:
+            loop = asyncio.get_running_loop()
+            self._perception_hash = await loop.run_in_executor(
+                self.tab.browser._process_pool, self.calc_perception_hash, self.blob
+            )
+        return self._perception_hash
+
     @staticmethod
-    def perception_hash(blob):
+    def calc_perception_hash(blob):
+        """
+        This function is async so we can offload the hash calculation to a separate process
+        """
         # make pillow image from blob
         image = Image.open(io.BytesIO(blob))
         image_hash = imagehash.phash(image)
@@ -62,9 +73,7 @@ class WebScreenshot(WebCapBase):
     async def json(self):
         # before we jsonify, wait until our tab is finished processing
         await self.tab.wait_for_finish()
-
-        loop = asyncio.get_running_loop()
-        perception_hash = await loop.run_in_executor(self.tab.browser._process_pool, self.perception_hash, self.blob)
+        perception_hash = await self.perception_hash()
         j = {
             "url": self.url,
             "final_url": self.final_url,
