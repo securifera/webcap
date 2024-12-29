@@ -3,7 +3,7 @@ import pytest
 import logging
 import extractous
 
-from test.helpers import *
+from .helpers import *
 from webcap import Browser
 from webcap.webscreenshot import WebScreenshot
 

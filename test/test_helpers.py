@@ -3,8 +3,6 @@ import pytest
 import asyncio
 from pathlib import Path
 
-from webcap import Browser
-
 
 @pytest.mark.asyncio
 async def test_helpers(temp_dir):
