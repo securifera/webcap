@@ -241,24 +241,25 @@ def scan(
         root_logger = logging.getLogger("webcap")
         root_logger.setLevel(logging.DEBUG)
 
-    browser = Browser(
-        threads=threads,
-        chrome_path=chrome_path,
-        resolution=resolution,
-        user_agent=user_agent,
-        proxy=proxy,
-        delay=delay,
-        full_page=full_page,
-        dom=dom,
-        javascript=javascript,
-        requests=requests,
-        responses=responses,
-        base64=base64,
-        ocr=ocr,
-        ignore_types=ignore_types,
-    )
+    async def _scan():
 
-    async def _scan(browser):
+        browser = Browser(
+            threads=threads,
+            chrome_path=chrome_path,
+            resolution=resolution,
+            user_agent=user_agent,
+            proxy=proxy,
+            delay=delay,
+            full_page=full_page,
+            dom=dom,
+            javascript=javascript,
+            requests=requests,
+            responses=responses,
+            base64=base64,
+            ocr=ocr,
+            ignore_types=ignore_types,
+        )
+
         index = {}
         last_index_sync = time.time()
         index_path = output_dir / "index.json"
@@ -337,7 +338,7 @@ def scan(
             with suppress(Exception):
                 await browser.stop()
 
-    uvloop.run(_scan(browser))
+    uvloop.run(_scan())
 
 
 def main():
