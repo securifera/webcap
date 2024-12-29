@@ -3,8 +3,8 @@ import pytest
 import logging
 import extractous
 
+from .helpers import *
 from webcap import Browser
-from webcap.test.helpers import *
 from webcap.webscreenshot import WebScreenshot
 
 logging.getLogger().setLevel(logging.DEBUG)

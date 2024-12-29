@@ -16,7 +16,7 @@ from webcap.tab import Tab
 from webcap import defaults
 from webcap.base import WebCapBase
 from webcap.errors import DevToolsProtocolError, WebCapError
-from webcap.helpers import task_pool, get_keyword_args, repr_params  # , download_wap
+from webcap.helpers import task_pool, repr_params  # , download_wap
 
 
 class Browser(WebCapBase):
@@ -331,18 +331,6 @@ class Browser(WebCapBase):
         shutil.rmtree(self.temp_dir, ignore_errors=True)
         with suppress(Exception):
             self.chrome_process.terminate()
-
-    @classmethod
-    def from_argparse(cls, options):
-        kwargs = {}
-        for name in get_keyword_args(cls.__init__):
-            try:
-                value = getattr(options, name)
-                if value is not None:
-                    kwargs[name] = value
-            except AttributeError:
-                pass
-        return cls(**kwargs)
 
     async def _next_message_id(self):
         async with self._message_id_lock:
