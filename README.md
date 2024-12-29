@@ -12,9 +12,9 @@ pipx install webcap
 
 ### Features
 
-WebCap's most unique feature is its ability to capture not only the **fully-rendered DOM**, but also every snippet of **parsed Javascript** (regardless of inline or external), and the **full content** of every HTTP request + response (including Javascript API calls etc.). For convenience, it outputs directly to JSON:
+WebCap's most unique feature is its ability to capture not only the **fully-rendered DOM**, but also every snippet of **parsed Javascript** (regardless of inline or external), and the **full content** of every HTTP request + response (including Javascript API calls etc.). For convenience, it can output directly to JSON.
 
-#### Screenshots
+### Screenshots
 
 ![image](https://github.com/user-attachments/assets/c5a409ea-d068-45d7-a4c1-8a8cddf6c491)
 

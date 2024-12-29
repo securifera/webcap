@@ -303,7 +303,9 @@ def scan(
                 # write screenshot to index
                 index[webscreenshot.id] = {
                     "url": webscreenshot.url,
-                    "status_code": webscreenshot.status_code,
+                    "final_url": final_url,
+                    "hash": webscreenshot.perception_hash,
+                    "status": webscreenshot.status_code,
                     "title": webscreenshot.title,
                 }
                 sync_index()
