@@ -83,7 +83,7 @@ def server(
         bool, typer.Option("--auto-reload", "-r", help="Auto reload the server when files change")
     ] = False,
     directory: Annotated[
-        Path, typer.Option("-d", "--directory", help="Directory to serve screenshots from", metavar="OUTPUT_DIR")
+        Path, typer.Option("-d", "-o", "--directory", help="Directory to serve screenshots from", metavar="OUTPUT_DIR")
     ] = default_output_dir,
 ):
     import uvicorn
@@ -242,7 +242,6 @@ def scan(
         root_logger.setLevel(logging.DEBUG)
 
     async def _scan():
-
         browser = Browser(
             threads=threads,
             chrome_path=chrome_path,
@@ -303,7 +302,9 @@ def scan(
                 # write screenshot to index
                 index[webscreenshot.id] = {
                     "url": webscreenshot.url,
-                    "status_code": webscreenshot.status_code,
+                    "final_url": final_url,
+                    "hash": await webscreenshot.perception_hash(),
+                    "status": webscreenshot.status_code,
                     "title": webscreenshot.title,
                 }
                 sync_index()

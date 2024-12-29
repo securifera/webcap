@@ -33,16 +33,9 @@
             const table = document.getElementById("screenshots-table");
             const row = table.insertRow();
             row.insertCell().innerHTML = `<img class="screenshot-thumbnail" src="/screenshots/${id}" alt="thumbnail" />`;
-            row.insertCell().textContent = value.status_code;
-            row.insertCell().textContent = value.title;
+            row.insertCell().textContent = value.status;
+            row.insertCell().innerHTML = `<a href="/screenshots/json/${id}.json">${value.title}</a>`;
             row.insertCell().textContent = value.url;
-
-            // fetch details at /screenshots/json/{id}.json
-            fetch(`/screenshots/json/${id}.json`)
-              .then(response => response.json())
-              .then(details => {
-                console.log(details);
-              });
           }
         });
     </script>
