@@ -115,8 +115,9 @@ class WebScreenshot(WebCapBase):
         return self._ocr_text
 
     def _get_ocr_text(self, blob):
-        result, _ = self.tab.browser.extractous.extract_bytes_to_string(bytearray(blob))
-        return result
+        # result, _ = self.tab.browser.extractous.extract_bytes_to_string(bytearray(blob))
+        # return result
+        return ""
 
     @property
     def network_history(self):

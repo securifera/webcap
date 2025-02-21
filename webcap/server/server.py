@@ -19,6 +19,7 @@ if not json_dir.is_dir():
 # serve screenshot files
 app = FastAPI()
 app.mount("/screenshots", StaticFiles(directory=output_dir), name="screenshots")
+app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
 
 templates_dir = Path(__file__).parent / "templates"

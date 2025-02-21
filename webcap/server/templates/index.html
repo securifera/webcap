@@ -1,43 +1,237 @@
-<html>
-  <head>
-    <title>Webcap</title>
-  </head>
-  <body>
-
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webcap React App</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <style>
-      .screenshot-thumbnail {
-        width: 100px;
-      }
+        .screenshot-thumbnail {
+            width: 100px;
+        }
+        .pagination {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        .pagination button {
+            margin: 0 5px;
+        }
+        body {
+            font-family: 'Courier New', Courier, monospace;
+        }
+        .button {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 0.25rem;
+            background-color: rgb(122, 52, 202); /* Intermediate between pastel and deep purple */
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .button.active {
+            background-color: rgb(255 0 255) !important; /* Active color */
+        }
+        .button:hover:not(:disabled) {
+            background-color: #553c9a; /* Darker purple on hover */
+        }
+        .button:disabled {
+            background-color: #9f7aea; /* Lighter purple for disabled state */
+            cursor: not-allowed;
+        }
+        .select-button {
+            padding: 0.5rem 1rem; /* Adjusted padding for a thicker look */
+            border: none;
+            border-radius: 0.25rem;
+            background-color: #2d3748; /* Darker background */
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .select-button:hover {
+            background-color: #4a5568; /* Slightly lighter on hover */
+        }
     </style>
+</head>
+<body class="bg-black text-white">
+    <div id="root" class="container mx-auto p-4"></div>
 
-    <table id="screenshots-table">
-      <thead>
-        <tr>
-          <th>thumbnail</th>
-          <th>Status Code</th>
-          <th>URL</th>
-          <th>Title</th>
-        </tr>
-      </thead>
-    </table>
+    <!-- React and ReactDOM from CDN -->
+    <script src="/static/react.production.min.js"></script>
+    <script src="/static/react-dom.production.min.js"></script>
 
     <script>
-      // fetch index.json and store it in a variable
-      fetch("/screenshots/index.json")
-        .then(response => response.json())
-        .then(data => {
-          const index = data;
-          // loop through each key,value pair in index
-          for (const [id, value] of Object.entries(index)) {
-            // add the values to the table
-            const table = document.getElementById("screenshots-table");
-            const row = table.insertRow();
-            row.insertCell().innerHTML = `<img class="screenshot-thumbnail" src="/screenshots/${id}" alt="thumbnail" />`;
-            row.insertCell().textContent = value.status;
-            row.insertCell().innerHTML = `<a href="/screenshots/json/${id}.json">${value.title}</a>`;
-            row.insertCell().textContent = value.url;
-          }
-        });
+        const { useState, useEffect } = React;
+
+        function App() {
+            const [screenshots, setScreenshots] = useState([]);
+            const [searchQuery, setSearchQuery] = useState('');
+            const [currentPage, setCurrentPage] = useState(1);
+            const [screenshotsPerPage, setScreenshotsPerPage] = useState(10);
+            const [sortConfig, setSortConfig] = useState(null);
+
+            useEffect(() => {
+                fetch("/screenshots/index.json")
+                    .then(response => response.json())
+                    .then(data => setScreenshots(data));
+            }, []);
+
+            const filteredScreenshots = Object.entries(screenshots).filter(([id, value]) => 
+                value.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                value.url.toLowerCase().includes(searchQuery.toLowerCase())
+            );
+
+            const sortedScreenshots = sortConfig ? [...filteredScreenshots].sort((a, b) => {
+                const [idA, valueA] = a;
+                const [idB, valueB] = b;
+                const key = sortConfig.key;
+
+                if (valueA[key] < valueB[key]) {
+                    return sortConfig.direction === 'ascending' ? -1 : 1;
+                }
+                if (valueA[key] > valueB[key]) {
+                    return sortConfig.direction === 'ascending' ? 1 : -1;
+                }
+                return 0;
+            }) : filteredScreenshots;
+
+            const indexOfLastScreenshot = currentPage * screenshotsPerPage;
+            const indexOfFirstScreenshot = indexOfLastScreenshot - screenshotsPerPage;
+            const currentScreenshots = sortedScreenshots.slice(indexOfFirstScreenshot, indexOfLastScreenshot);
+
+            const totalPages = Math.ceil(filteredScreenshots.length / screenshotsPerPage);
+
+            const handlePageChange = (pageNumber) => {
+                setCurrentPage(pageNumber);
+            };
+
+            const handlePageSizeChange = (event) => {
+                setScreenshotsPerPage(Number(event.target.value));
+                setCurrentPage(1); // Reset to first page on page size change
+            };
+
+            const handleSort = (key) => {
+                let direction = 'ascending';
+                if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
+                    direction = 'descending';
+                }
+                setSortConfig({ key, direction });
+            };
+
+            return React.createElement('div', null,
+                React.createElement('a', { href: 'https://github.com/blacklanternsecurity/webcap', target: '_blank' },
+                    React.createElement('img', { 
+                        src: '/static/webcap.png', 
+                        alt: 'Webcap Logo', 
+                        style: { height: '15em' },
+                        className: 'mb-4' 
+                    })
+                ),
+                React.createElement('div', { className: 'flex items-center justify-between mb-4 space-x-4' },
+                    React.createElement(SearchBar, { onSearch: setSearchQuery }),
+                    React.createElement(Pagination, { 
+                        currentPage: currentPage, 
+                        totalPages: totalPages, 
+                        onPageChange: handlePageChange,
+                        onPageSizeChange: handlePageSizeChange
+                    })
+                ),
+                React.createElement(ScreenshotList, { screenshots: currentScreenshots, onSort: handleSort })
+            );
+        }
+
+        function SearchBar({ onSearch }) {
+            return React.createElement('input', {
+                type: 'text',
+                placeholder: 'Search screenshots...',
+                className: 'w-full p-2 border border-gray-700 rounded bg-gray-900 text-white h-10',
+                onChange: (e) => onSearch(e.target.value)
+            });
+        }
+
+        function ScreenshotList({ screenshots, onSort }) {
+            return React.createElement('table', { className: 'w-full mb-4 border-collapse' },
+                React.createElement('thead', null,
+                    React.createElement('tr', { className: 'bg-gray-800' },
+                        React.createElement('th', { className: 'p-2 border-b border-gray-700 cursor-pointer', onClick: () => onSort('thumbnail') }, 'Thumbnail'),
+                        React.createElement('th', { className: 'p-2 border-b border-gray-700 cursor-pointer', onClick: () => onSort('status') }, 'Status Code'),
+                        React.createElement('th', { className: 'p-2 border-b border-gray-700 cursor-pointer', onClick: () => onSort('title') }, 'Title'),
+                        React.createElement('th', { className: 'p-2 border-b border-gray-700 cursor-pointer', onClick: () => onSort('url') }, 'URL')
+                    )
+                ),
+                React.createElement('tbody', null,
+                    screenshots.map(([id, value]) => 
+                        React.createElement(ScreenshotItem, { key: id, id: id, value: value })
+                    )
+                )
+            );
+        }
+
+        function ScreenshotItem({ id, value }) {
+            return React.createElement('tr', { className: 'hover:bg-gray-800' },
+                React.createElement('td', { className: 'p-2 border-b border-gray-700' },
+                    React.createElement('img', { className: 'screenshot-thumbnail', src: `/screenshots/${id}`, alt: 'thumbnail' })
+                ),
+                React.createElement('td', { className: 'p-2 border-b border-gray-700' }, value.status),
+                React.createElement('td', { className: 'p-2 border-b border-gray-700' },
+                    React.createElement('a', { href: `/screenshots/json/${id}.json`, target: '_blank', className: 'text-white' }, value.title)
+                ),
+                React.createElement('td', { className: 'p-2 border-b border-gray-700' },
+                    React.createElement('a', { href: value.url, target: '_blank', className: 'text-white' }, value.url)
+                )
+            );
+        }
+
+        function PageSizeSelector({ onPageSizeChange }) {
+            return React.createElement('select', { 
+                onChange: onPageSizeChange, 
+                className: 'ml-2 border border-gray-700 rounded bg-gray-900 text-white select-button'
+            },
+                [10, 20, 50, 100].map(size => 
+                    React.createElement('option', { key: size, value: size }, `${size} per page`)
+                )
+            );
+        }
+
+        function Pagination({ currentPage, totalPages, onPageChange, onPageSizeChange }) {
+            const pageNumbers = [];
+            const maxPageButtons = 5; // Number of page buttons to display
+
+            let startPage = Math.max(1, currentPage - Math.floor(maxPageButtons / 2));
+            let endPage = Math.min(totalPages, startPage + maxPageButtons - 1);
+
+            if (endPage - startPage < maxPageButtons - 1) {
+                startPage = Math.max(1, endPage - maxPageButtons + 1);
+            }
+
+            for (let i = startPage; i <= endPage; i++) {
+                pageNumbers.push(i);
+            }
+
+            return React.createElement('div', { className: 'flex items-center space-x-2' },
+                React.createElement('button', { 
+                    onClick: () => onPageChange(1), 
+                    disabled: currentPage === 1,
+                    className: `button ${currentPage === 1 ? 'active' : ''}`
+                }, 'First'),
+                pageNumbers.map(number => 
+                    React.createElement('button', { 
+                        key: number, 
+                        onClick: () => onPageChange(number),
+                        disabled: number === currentPage,
+                        className: `button ${number === currentPage ? 'active' : ''}`
+                    }, number)
+                ),
+                React.createElement('button', { 
+                    onClick: () => onPageChange(totalPages), 
+                    disabled: currentPage === totalPages,
+                    className: `button ${currentPage === totalPages ? 'active' : ''}`
+                }, 'Last'),
+                React.createElement(PageSizeSelector, { onPageSizeChange: onPageSizeChange })
+            );
+        }
+
+        ReactDOM.render(React.createElement(App), document.getElementById('root'));
     </script>
-  </body>
+</body>
 </html>

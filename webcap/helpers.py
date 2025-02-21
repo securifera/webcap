@@ -226,7 +226,7 @@ def truncate_filename(file_path, max_length=255):
 def color_status_code(status_code):
     status_code = str(status_code)
     if status_code == "404":
-        color = "white"
+        color = "orchid"
     elif status_code.startswith("2"):
         color = "bright_green"
     elif status_code.startswith("3"):

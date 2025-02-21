@@ -338,13 +338,13 @@ class Browser(WebCapBase):
             self._current_message_id += 1
         return message_id
 
-    @property
-    def extractous(self):
-        if self._extractous is None:
-            import extractous
+    # @property
+    # def extractous(self):
+    #     if self._extractous is None:
+    #         import extractous
 
-            self._extractous = extractous.Extractor()
-        return self._extractous
+    #         self._extractous = extractous.Extractor()
+    #     return self._extractous
 
     # async def get_wap_session(self):
     #     # wait for chrome extension to come online (100 iterations == 10 seconds)
