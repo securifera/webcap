@@ -14,17 +14,18 @@ classifiers = [
 ]
 
 [tool.poetry.dependencies]
-python = ">=3.9,<3.13"
+python = ">=3.9,<3.14"
 httpx = "^0.28.0"
 websockets = "^14.1"
 orjson = "^3.10.12"
-extractous = "^0.2.0"
 uvloop = "^0.21.0"
-imagehash = "^4.3.1"
 fastapi = "^0.115.6"
 uvicorn = "^0.34.0"
 rich = "^13.9.4"
 typer = "^0.15.1"
+extractous = "^0.3.0"
+pillow = "^11.1.0"
+numpy = ">=2.0.2,<2.1.0"
 
 [tool.poetry.scripts]
 webcap = "webcap.cli:main"
