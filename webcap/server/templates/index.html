@@ -235,16 +235,16 @@
                     React.createElement('img', { 
                         src: '/static/webcap.png', 
                         alt: 'Webcap Logo', 
-                        style: { height: '15em' },
+                        style: { height: '12em' },
                         className: 'mb-4' 
                     })
                 ),
                 React.createElement('div', { className: 'bg-gray-900 p-6 rounded-lg' },
                     React.createElement('div', { className: 'flex items-center space-x-4' },
-                        React.createElement('div', { className: 'w-2/5' },
+                        React.createElement('div', { className: 'w-1/2' },
                             React.createElement(SearchBar, { onSearch: setSearchQuery })
                         ),
-                        React.createElement('div', { className: 'w-3/5' },
+                        React.createElement('div', { className: 'w-1/2' },
                             React.createElement(PerceptionWidget, {
                                 screenshots,
                                 selectedHashes,
@@ -485,7 +485,7 @@
                     onClick: () => navigateHash('prev'),
                     disabled: sortedHashes.length === 0
                 }, '<'),
-                
+
                 React.createElement('div', { className: 'perception-preview' },
                     currentGroup 
                         ? React.createElement('div', { className: 'flex items-center space-x-4' },
@@ -498,7 +498,7 @@
                                     currentGroup[0].title || 'Untitled'
                                 ),
                                 React.createElement('div', null, 
-                                    `${currentGroup.length} similar screenshots`
+                                    `${currentGroup.length} similar`
                                 )
                             )
                         )
@@ -506,12 +506,6 @@
                             'No perception filter active'
                         )
                 ),
-                
-                React.createElement('button', {
-                    className: 'perception-nav-button',
-                    onClick: () => navigateHash('next'),
-                    disabled: sortedHashes.length === 0
-                }, '>'),
 
                 React.createElement('div', { className: 'button-stack' },
                     React.createElement('button', {
@@ -523,7 +517,13 @@
                         className: 'button',
                         onClick: onShowModal
                     }, 'Select Custom')
-                )
+                ),
+                
+                React.createElement('button', {
+                    className: 'perception-nav-button',
+                    onClick: () => navigateHash('next'),
+                    disabled: sortedHashes.length === 0
+                }, '>')
             );
         }
 
