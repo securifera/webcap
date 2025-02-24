@@ -7,15 +7,15 @@
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <style>
         .screenshot-thumbnail {
-            width: 100px;
+            width: 6rem;
         }
         .pagination {
             display: flex;
             justify-content: center;
-            margin-top: 20px;
+            margin-top: 1rem;
         }
         .pagination button {
-            margin: 0 5px;
+            margin: 0 2px;
         }
         body {
             font-family: 'Fira Code', 'Courier New', Courier, monospace;
@@ -36,7 +36,7 @@
             color: white; /* Ensure text remains visible */
         }
         .button:disabled {
-            border-color: #9f7aea; /* Lighter border for disabled state */
+            border-color: #504861; /* Lighter border for disabled state */
             cursor: not-allowed;
         }
         .select-button {
@@ -49,6 +49,107 @@
         }
         .select-button:hover {
             background-color: #4a5568; /* Slightly lighter on hover */
+        }
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: #1a202c;
+            padding: 2rem;
+            border-radius: 0.5rem;
+            max-width: 80%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .hash-group {
+            border: 1px solid #4a5568;
+            margin-bottom: 1rem;
+            padding: 1rem;
+            cursor: pointer;
+        }
+        .hash-group:hover {
+            background-color: #2d3748;
+        }
+        .hash-checkbox {
+            width: 1.5rem;
+            height: 1.5rem;
+            cursor: pointer;
+            accent-color: rgb(122, 52, 202);
+        }
+        .perception-widget {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            min-width: auto;
+            flex-wrap: wrap;
+        }
+        .perception-preview {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 1rem;
+            min-width: auto;
+            height: 6rem;
+            flex: 1;
+        }
+        .perception-preview img {
+            width: 6rem;
+            height: 4.5rem;
+            object-fit: cover;
+        }
+        .perception-preview .text-content {
+            flex: 1;
+            overflow: hidden;  /* Prevent text overflow */
+        }
+        .perception-preview .title {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 16rem;
+        }
+        .perception-nav-button {
+            padding: 0.25rem 0.5rem;
+            border: 2px solid rgb(122, 52, 202);
+            background-color: black;
+            color: rgb(122, 52, 202);
+            cursor: pointer;
+            font-size: 2rem;
+            min-width: 3rem;
+            height: 5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .perception-nav-button:disabled {
+            border-color: #4a5568;
+            color: #4a5568;
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+        .perception-nav-button:hover:not(:disabled) {
+            background-color: rgb(122, 52, 202);
+            color: white;
+            transform: scale(1.1);
+        }
+        .button-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        .button-stack .button {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.875rem;
+            min-width: 6rem;
         }
     </style>
 </head>
@@ -68,6 +169,8 @@
             const [currentPage, setCurrentPage] = useState(1);
             const [screenshotsPerPage, setScreenshotsPerPage] = useState(10);
             const [sortConfig, setSortConfig] = useState(null);
+            const [showHashModal, setShowHashModal] = useState(false);
+            const [selectedHashes, setSelectedHashes] = useState(new Set());
 
             useEffect(() => {
                 fetch("/screenshots/index.json")
@@ -75,10 +178,16 @@
                     .then(data => setScreenshots(data));
             }, []);
 
-            const filteredScreenshots = Object.entries(screenshots).filter(([id, value]) => 
-                value.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                value.url.toLowerCase().includes(searchQuery.toLowerCase())
-            );
+            useEffect(() => {
+                setCurrentPage(1);
+            }, [selectedHashes, searchQuery]);
+
+            const filteredScreenshots = Object.entries(screenshots)
+                .filter(([id, value]) => 
+                    (selectedHashes.size === 0 || selectedHashes.has(value.hash)) &&
+                    (value.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                    value.url.toLowerCase().includes(searchQuery.toLowerCase()))
+                );
 
             const sortedScreenshots = sortConfig ? [...filteredScreenshots].sort((a, b) => {
                 const [idA, valueA] = a;
@@ -130,16 +239,36 @@
                         className: 'mb-4' 
                     })
                 ),
-                React.createElement('div', { className: 'flex items-center justify-between mb-4 space-x-4' },
-                    React.createElement(SearchBar, { onSearch: setSearchQuery }),
-                    React.createElement(Pagination, { 
-                        currentPage: currentPage, 
-                        totalPages: totalPages, 
-                        onPageChange: handlePageChange,
-                        onPageSizeChange: handlePageSizeChange
-                    })
+                React.createElement('div', { className: 'bg-gray-900 p-6 rounded-lg' },
+                    React.createElement('div', { className: 'flex items-center space-x-4' },
+                        React.createElement('div', { className: 'w-2/5' },
+                            React.createElement(SearchBar, { onSearch: setSearchQuery })
+                        ),
+                        React.createElement('div', { className: 'w-3/5' },
+                            React.createElement(PerceptionWidget, {
+                                screenshots,
+                                selectedHashes,
+                                setSelectedHashes,
+                                onShowModal: () => setShowHashModal(true)
+                            })
+                        )
+                    ),
+                    React.createElement(ScreenshotList, { screenshots: currentScreenshots, onSort: handleSort }),
+                    React.createElement('div', { className: 'mt-4 flex justify-center' },
+                        React.createElement(Pagination, { 
+                            currentPage, 
+                            totalPages, 
+                            onPageChange: handlePageChange,
+                            onPageSizeChange: handlePageSizeChange
+                        })
+                    )
                 ),
-                React.createElement(ScreenshotList, { screenshots: currentScreenshots, onSort: handleSort })
+                showHashModal && React.createElement(HashModal, {
+                    screenshots,
+                    onClose: () => setShowHashModal(false),
+                    selectedHashes,
+                    setSelectedHashes
+                })
             );
         }
 
@@ -147,7 +276,8 @@
             return React.createElement('input', {
                 type: 'text',
                 placeholder: 'Search screenshots...',
-                className: 'w-full p-2 border border-gray-700 rounded bg-gray-900 text-white h-10',
+                className: 'w-full p-2 border border-gray-700 rounded bg-gray-900 text-white h-16',
+                style: { height: '5rem' },
                 onChange: (e) => onSearch(e.target.value)
             });
         }
@@ -231,6 +361,169 @@
                     className: `button ${currentPage === totalPages ? 'active' : ''}`
                 }, 'Last'),
                 React.createElement(PageSizeSelector, { onPageSizeChange: onPageSizeChange })
+            );
+        }
+
+        function HashModal({ screenshots, onClose, selectedHashes, setSelectedHashes }) {
+            // Group screenshots by hash and sort by count descending
+            const hashGroups = Object.entries(screenshots)
+                .reduce((acc, [id, value]) => {
+                    if (!acc[value.hash]) {
+                        acc[value.hash] = [];
+                    }
+                    acc[value.hash].push({ id, ...value });
+                    return acc;
+                }, {});
+
+            // Convert to array and sort by count descending
+            const sortedHashGroups = Object.entries(hashGroups)
+                .sort(([, groupA], [, groupB]) => groupB.length - groupA.length);
+
+            const toggleHash = (hash) => {
+                const newSelected = new Set(selectedHashes);
+                if (newSelected.has(hash)) {
+                    newSelected.delete(hash);
+                } else {
+                    newSelected.add(hash);
+                }
+                setSelectedHashes(newSelected);
+            };
+
+            return React.createElement('div', { 
+                className: 'modal',
+                onClick: (e) => {
+                    if (e.target === e.currentTarget) {
+                        onClose();
+                    }
+                }
+            },
+                React.createElement('div', { 
+                    className: 'modal-content'
+                },
+                    React.createElement('div', { className: 'flex justify-between mb-4' },
+                        React.createElement('h2', { className: 'text-xl' }, 'Perception Hash Groups'),
+                        React.createElement('button', {
+                            className: 'button',
+                            onClick: onClose
+                        }, '×')
+                    ),
+                    sortedHashGroups.map(([hash, group]) =>
+                        React.createElement('div', { 
+                            key: hash,
+                            className: 'hash-group',
+                            onClick: () => toggleHash(hash)
+                        },
+                            React.createElement('div', { className: 'flex items-center space-x-4' },
+                                React.createElement('input', {
+                                    type: 'checkbox',
+                                    checked: selectedHashes.has(hash),
+                                    onChange: (e) => {
+                                        e.stopPropagation();
+                                        toggleHash(hash);
+                                    },
+                                    className: 'hash-checkbox'
+                                }),
+                                React.createElement('img', {
+                                    className: 'screenshot-thumbnail',
+                                    src: `/screenshots/${group[0].id}`,
+                                    alt: 'Representative thumbnail'
+                                }),
+                                React.createElement('div', null,
+                                    React.createElement('div', null, group[0].title || 'Untitled'),
+                                    React.createElement('div', null, `${group.length} similar`)
+                                )
+                            )
+                        )
+                    )
+                )
+            );
+        }
+
+        function PerceptionWidget({ screenshots, selectedHashes, setSelectedHashes, onShowModal }) {
+            // Group and sort hashes like in the modal
+            const hashGroups = Object.entries(screenshots)
+                .reduce((acc, [id, value]) => {
+                    if (!acc[value.hash]) {
+                        acc[value.hash] = [];
+                    }
+                    acc[value.hash].push({ id, ...value });
+                    return acc;
+                }, {});
+
+            const sortedHashes = Object.entries(hashGroups)
+                .sort(([, groupA], [, groupB]) => groupB.length - groupA.length)
+                .map(([hash]) => hash);
+
+            // Get current hash index
+            const currentHashIndex = selectedHashes.size === 1 
+                ? sortedHashes.indexOf(Array.from(selectedHashes)[0])
+                : -1;
+
+            const navigateHash = (direction) => {
+                let newIndex;
+                if (currentHashIndex === -1) {
+                    newIndex = direction === 'next' ? 0 : sortedHashes.length - 1;
+                } else {
+                    newIndex = direction === 'next' 
+                        ? (currentHashIndex + 1) % sortedHashes.length
+                        : (currentHashIndex - 1 + sortedHashes.length) % sortedHashes.length;
+                }
+                setSelectedHashes(new Set([sortedHashes[newIndex]]));
+            };
+
+            const clearSelection = () => {
+                setSelectedHashes(new Set());
+            };
+
+            // Get current group info
+            const currentHash = currentHashIndex !== -1 ? sortedHashes[currentHashIndex] : null;
+            const currentGroup = currentHash ? hashGroups[currentHash] : null;
+
+            return React.createElement('div', { className: 'perception-widget' },
+                React.createElement('button', {
+                    className: 'perception-nav-button',
+                    onClick: () => navigateHash('prev'),
+                    disabled: sortedHashes.length === 0
+                }, '<'),
+                
+                React.createElement('div', { className: 'perception-preview' },
+                    currentGroup 
+                        ? React.createElement('div', { className: 'flex items-center space-x-4' },
+                            React.createElement('img', {
+                                src: `/screenshots/${currentGroup[0].id}`,
+                                alt: 'Preview'
+                            }),
+                            React.createElement('div', { className: 'text-content' },
+                                React.createElement('div', { className: 'title' }, 
+                                    currentGroup[0].title || 'Untitled'
+                                ),
+                                React.createElement('div', null, 
+                                    `${currentGroup.length} similar screenshots`
+                                )
+                            )
+                        )
+                        : React.createElement('div', { className: 'text-gray-500' }, 
+                            'No perception filter active'
+                        )
+                ),
+                
+                React.createElement('button', {
+                    className: 'perception-nav-button',
+                    onClick: () => navigateHash('next'),
+                    disabled: sortedHashes.length === 0
+                }, '>'),
+
+                React.createElement('div', { className: 'button-stack' },
+                    React.createElement('button', {
+                        className: 'button',
+                        onClick: clearSelection,
+                        disabled: selectedHashes.size === 0
+                    }, 'Clear'),
+                    React.createElement('button', {
+                        className: 'button',
+                        onClick: onShowModal
+                    }, 'Select Custom')
+                )
             );
         }
 
