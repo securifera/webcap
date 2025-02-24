@@ -305,9 +305,9 @@
                 React.createElement('td', { className: 'p-2 border-b border-gray-700' },
                     React.createElement('img', { className: 'screenshot-thumbnail', src: `/screenshots/${id}`, alt: 'thumbnail' })
                 ),
-                React.createElement('td', { className: 'p-2 border-b border-gray-700' }, value.status),
+                React.createElement('td', { className: 'p-2 border-b border-gray-700 font-bold' }, value.status),
                 React.createElement('td', { className: 'p-2 border-b border-gray-700' },
-                    React.createElement('a', { href: `/screenshots/json/${id}.json`, target: '_blank', className: 'text-white' }, value.title)
+                    React.createElement('a', { href: `/screenshots/json/${id}.json`, target: '_blank', className: 'text-white font-bold' }, value.title)
                 ),
                 React.createElement('td', { className: 'p-2 border-b border-gray-700' },
                     React.createElement('a', { href: value.url, target: '_blank', className: 'text-white' }, value.url)
