@@ -1,11 +1,11 @@
 import io
 import base64
 import asyncio
-import imagehash
 from PIL import Image
 from urllib.parse import urlparse
 
 from webcap.base import WebCapBase
+from webcap.imagehash import phash
 from webcap.javascript import JavaScript
 from webcap.helpers import sanitize_filename
 
@@ -57,7 +57,7 @@ class WebScreenshot(WebCapBase):
         """
         # make pillow image from blob
         image = Image.open(io.BytesIO(blob))
-        image_hash = imagehash.phash(image)
+        image_hash = phash(image)
         return str(image_hash)
 
     @property
@@ -115,8 +115,8 @@ class WebScreenshot(WebCapBase):
         return self._ocr_text
 
     def _get_ocr_text(self, blob):
-        # result, _ = self.tab.browser.extractous.extract_bytes_to_string(bytearray(blob))
-        # return result
+        result, _ = self.tab.browser.extractous.extract_bytes_to_string(bytearray(blob))
+        return result
         return ""
 
     @property

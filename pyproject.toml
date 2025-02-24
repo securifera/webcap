@@ -23,6 +23,7 @@ fastapi = "^0.115.6"
 uvicorn = "^0.34.0"
 rich = "^13.9.4"
 typer = "^0.15.1"
+extractous = "^0.3.0"
 
 [tool.poetry.scripts]
 webcap = "webcap.cli:main"

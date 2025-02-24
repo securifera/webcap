@@ -18,25 +18,25 @@
             margin: 0 5px;
         }
         body {
-            font-family: 'Courier New', Courier, monospace;
+            font-family: 'Fira Code', 'Courier New', Courier, monospace;
         }
         .button {
             padding: 0.5rem 1rem;
-            border: none;
-            border-radius: 0.25rem;
-            background-color: rgb(122, 52, 202); /* Intermediate between pastel and deep purple */
+            border: 2px solid rgb(122, 52, 202); /* Colored border */
+            border-radius: 0; /* Square corners */
+            background-color: black; /* Black background */
             color: white;
             cursor: pointer;
-            transition: background-color 0.3s;
         }
         .button.active {
-            background-color: rgb(255 0 255) !important; /* Active color */
+            border-color: rgb(255, 0, 255) !important; /* Active border color */
         }
         .button:hover:not(:disabled) {
-            background-color: #553c9a; /* Darker purple on hover */
+            background-color: rgb(122, 52, 202); /* Fill with border color on hover */
+            color: white; /* Ensure text remains visible */
         }
         .button:disabled {
-            background-color: #9f7aea; /* Lighter purple for disabled state */
+            border-color: #9f7aea; /* Lighter border for disabled state */
             cursor: not-allowed;
         }
         .select-button {
@@ -46,7 +46,6 @@
             background-color: #2d3748; /* Darker background */
             color: white;
             cursor: pointer;
-            transition: background-color 0.3s;
         }
         .select-button:hover {
             background-color: #4a5568; /* Slightly lighter on hover */
@@ -97,7 +96,10 @@
 
             const indexOfLastScreenshot = currentPage * screenshotsPerPage;
             const indexOfFirstScreenshot = indexOfLastScreenshot - screenshotsPerPage;
-            const currentScreenshots = sortedScreenshots.slice(indexOfFirstScreenshot, indexOfLastScreenshot);
+            const currentScreenshots = sortedScreenshots.slice(
+                indexOfFirstScreenshot, 
+                screenshotsPerPage === -1 ? sortedScreenshots.length : indexOfLastScreenshot
+            );
 
             const totalPages = Math.ceil(filteredScreenshots.length / screenshotsPerPage);
 
@@ -106,7 +108,8 @@
             };
 
             const handlePageSizeChange = (event) => {
-                setScreenshotsPerPage(Number(event.target.value));
+                const newSize = Number(event.target.value);
+                setScreenshotsPerPage(newSize);
                 setCurrentPage(1); // Reset to first page on page size change
             };
 
@@ -187,8 +190,8 @@
                 onChange: onPageSizeChange, 
                 className: 'ml-2 border border-gray-700 rounded bg-gray-900 text-white select-button'
             },
-                [10, 20, 50, 100].map(size => 
-                    React.createElement('option', { key: size, value: size }, `${size} per page`)
+                [10, 20, 50, 100, -1].map(size => 
+                    React.createElement('option', { key: size, value: size }, size === -1 ? 'Show All' : `${size} per page`)
                 )
             );
         }

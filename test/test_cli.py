@@ -1,6 +1,6 @@
 import pytest
 import shutil
-# import extractous
+import extractous
 
 from .helpers import *
 
@@ -43,7 +43,7 @@ def test_cli(monkeypatch, webcap_httpserver, capsys, temp_dir):
     # make sure screenshot actually captured the page
     assert screenshot_file.is_file()
     # extract text from image
-    # extractor = extractous.Extractor()
+    extractor = extractous.Extractor()
     reader, metadata = extractor.extract_file(str(screenshot_file))
     frank = reader.read(99999)
     assert "hello frank" in frank.decode()

@@ -176,6 +176,24 @@ files = [
 test = ["pytest (>=6)"]
 
 [[package]]
+name = "extractous"
+version = "0.3.0"
+description = "Extractous Python Binding"
+optional = false
+python-versions = "<3.14,>=3.8"
+files = [
+    {file = "extractous-0.3.0-cp38-abi3-macosx_10_12_x86_64.whl", hash = "sha256:9f513d8da78b74ab655e659c64e287ddd653009f5af011cef0d2c8467a931e38"},
+    {file = "extractous-0.3.0-cp38-abi3-macosx_11_0_arm64.whl", hash = "sha256:6e43d9dee26e7cb322b6f9059f3e3565252f444b80d2f4ff2007a002fdd00727"},
+    {file = "extractous-0.3.0-cp38-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:01ef136a5901aed0e813f747989bbeaff60e4777cc77b933bef8f10de80b7dfd"},
+    {file = "extractous-0.3.0-cp38-abi3-win_amd64.whl", hash = "sha256:d86754320beba736f33c10227a641cce473cfb690c9e2d5ae823c917110c98ab"},
+    {file = "extractous-0.3.0.tar.gz", hash = "sha256:ebccc7778137d6be7680660f1e880e8a1898dedca7f64ab4b354a68d22359e84"},
+]
+
+[package.extras]
+docs = ["pdoc"]
+test = ["pytest", "scikit-learn"]
+
+[[package]]
 name = "fastapi"
 version = "0.115.8"
 description = "FastAPI framework, high performance, easy to learn, fast to code, ready for production"
@@ -1237,4 +1255,4 @@ watchdog = ["watchdog (>=2.3)"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.9,<3.14"
-content-hash = "1efca6b416d5e03725f5e210d210fb9dd778424eae437853c8fabb195eb09eb3"
+content-hash = "4535a6fe09954a48fdf016fd7ffba7dea8fb5e937f08e08041bbe4fc3c194873"

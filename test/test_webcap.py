@@ -1,7 +1,7 @@
 import base64
 import pytest
 import logging
-# import extractous
+import extractous
 
 from .helpers import *
 from webcap import Browser
@@ -27,7 +27,7 @@ async def test_screenshot(webcap_httpserver, temp_dir):
         f.write(image_bytes)
 
     # extract text from image
-    # extractor = extractous.Extractor()
+    extractor = extractous.Extractor()
     reader, metadata = extractor.extract_file(str(image_path))
     frank = reader.read(99999).decode()
     assert "hello frank" in frank
