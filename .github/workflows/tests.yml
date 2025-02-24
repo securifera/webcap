@@ -36,10 +36,12 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt update
-          sudo apt install -y tesseract-ocr
+          sudo apt install -y tesseract-ocr chromium-browser
           pip install poetry
           poetry install
       - name: Run tests
+        env:
+          CHROME_DEVEL_SANDBOX: /usr/lib/chromium/chrome-sandbox
         run: |
           poetry run pytest -s -vv --disable-warnings --cov-report xml:cov.xml --cov=webcap .
       - name: Upload Code Coverage
