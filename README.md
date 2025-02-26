@@ -2,11 +2,7 @@
 
 [![Python Version](https://img.shields.io/badge/python-3.9+-8400ff)](https://www.python.org) [![License](https://img.shields.io/badge/license-GPLv3-8400ff.svg)](https://github.com/blacklanternsecurity/webcap/blob/dev/LICENSE) [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff) [![Tests](https://github.com/blacklanternsecurity/webcap/actions/workflows/tests.yml/badge.svg?branch=stable)](https://github.com/blacklanternsecurity/webcap/actions?query=workflow%3A"tests") [![Codecov](https://codecov.io/gh/blacklanternsecurity/webcap/branch/dev/graph/badge.svg?token=IR5AZBDM5K)](https://codecov.io/gh/blacklanternsecurity/webcap) [![Discord](https://img.shields.io/discord/859164869970362439)](https://discord.com/invite/PZqkgxu5SA)
 
-**WebCap** is an extremely lightweight headless web screenshot tool. It doesn't require Selenium, Playwright, Puppeteer, or any other browser automation framework; all it needs is a working Chrome installation. Used by [BBOT](https://github.com/blacklanternsecurity/bbot).
-
-### Features
-
-WebCap's most unique feature is its ability to capture not only the **fully-rendered DOM**, but also every snippet of **parsed Javascript** (regardless of inline or external), and the **full content** of every HTTP request + response (including Javascript API calls etc.). For convenience, it can output directly to JSON.
+**WebCap** is an extremely lightweight web screenshot tool. It doesn't require Selenium, Playwright, Puppeteer, or any other browser automation framework; all it needs is a working Chrome installation. Used by [BBOT](https://github.com/blacklanternsecurity/bbot).
 
 ### Installation
 
@@ -17,6 +13,10 @@ pipx install webcap
 ### Web Interface (`webcap server`)
 
 https://github.com/user-attachments/assets/a5dea3fb-fa01-41e7-90cd-67c6efa3d6e5
+
+### Features
+
+WebCap's most unique feature is its ability to capture not only the **fully-rendered DOM**, but also every snippet of **parsed Javascript** (regardless of inline or external), and the **full content** of every HTTP request + response (including Javascript API calls etc.). For convenience, it can output directly to JSON.
 
 ### Example Commands
 
@@ -49,10 +49,6 @@ webcap server
 ```
 
 # Screenshots
-
-### Web Interface (`webcap server`)
-
-https://github.com/user-attachments/assets/a5dea3fb-fa01-41e7-90cd-67c6efa3d6e5
 
 ### CLI Interface (`webcap scan`)
 
@@ -90,45 +86,8 @@ https://github.com/user-attachments/assets/a5dea3fb-fa01-41e7-90cd-67c6efa3d6e5
 - [x] OCR text extraction
 - [x] Web interface
 
-<<<<<<< Updated upstream
-### Example Commands
-
-#### Scanning
-
-```bash
-# Capture screenshots of all URLs in urls.txt
-webcap scan urls.txt -o ./my_screenshots
-
-# Output to JSON, and include the fully-rendered DOM
-webcap scan urls.txt --json --dom | jq
-
-# Capture requests and responses
-webcap scan urls.txt --json --requests --responses | jq
-
-# Capture javascript
-webcap scan urls.txt --json --javascript | jq
-
-# Extract text from screenshots
-webcap scan urls.txt --json --ocr | jq
-```
-
-<<<<<<< HEAD
-#### Server
-
-```bash
-# Start the server
-webcap server
-
-# Browse to http://localhost:8000
-```
 
 ### Webcap as a Python library
-=======
-### Use as a Python library
-=======
-### Webcap as a Python library
->>>>>>> Stashed changes
->>>>>>> 1ef4945 (update readme)
 
 ```python
 import base64
