@@ -54,7 +54,7 @@ https://github.com/user-attachments/assets/a5dea3fb-fa01-41e7-90cd-67c6efa3d6e5
 - [x] Fuzzy (perception) hashing
 - [ ] Technology detection
 - [x] OCR text extraction
-- [ ] Web interface
+- [x] Web interface
 
 ### Example Commands
 
