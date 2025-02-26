@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webcap React App</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        .screenshot-thumbnail {
+            width: 6rem;
+        }
+        .pagination {
+            display: flex;
+            justify-content: center;
+            margin-top: 1rem;
+        }
+        .pagination button {
+            margin: 0 2px;
+        }
+        body {
+            font-family: 'Fira Code', 'Courier New', Courier, monospace;
+        }
+        .button {
+            padding: 0.5rem 1rem;
+            border: 2px solid rgb(122, 52, 202); /* Colored border */
+            border-radius: 0; /* Square corners */
+            background-color: black; /* Black background */
+            color: white;
+            cursor: pointer;
+        }
+        .button.active {
+            border-color: rgb(255, 0, 255) !important; /* Active border color */
+        }
+        .button:hover:not(:disabled) {
+            background-color: rgb(122, 52, 202); /* Fill with border color on hover */
+            color: white; /* Ensure text remains visible */
+        }
+        .button:disabled {
+            border-color: #504861; /* Lighter border for disabled state */
+            cursor: not-allowed;
+        }
+        .select-button {
+            padding: 0.5rem 1rem; /* Adjusted padding for a thicker look */
+            border: none;
+            border-radius: 0.25rem;
+            background-color: #2d3748; /* Darker background */
+            color: white;
+            cursor: pointer;
+        }
+        .select-button:hover {
+            background-color: #4a5568; /* Slightly lighter on hover */
+        }
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: #1a202c;
+            padding: 2rem;
+            border-radius: 0.5rem;
+            max-width: 80%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .hash-group {
+            border: 1px solid #4a5568;
+            margin-bottom: 1rem;
+            padding: 1rem;
+            cursor: pointer;
+        }
+        .hash-group:hover {
+            background-color: #2d3748;
+        }
+        .hash-checkbox {
+            width: 1.5rem;
+            height: 1.5rem;
+            cursor: pointer;
+            accent-color: rgb(122, 52, 202);
+        }
+        .perception-widget {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            min-width: auto;
+            flex-wrap: nowrap;  /* Prevent wrapping */
+        }
+        .perception-preview {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 1rem;
+            min-width: auto;
+            height: 6rem;
+            flex: 1;
+            min-width: 0;  /* Allow content to shrink below min-content width */
+        }
+        .perception-preview img {
+            width: 6rem;
+            height: 4.5rem;
+            object-fit: cover;
+        }
+        .perception-preview .text-content {
+            flex: 1;
+            overflow: hidden;  /* Prevent text overflow */
+        }
+        .perception-preview .title {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 16rem;
+        }
+        .perception-nav-button {
+            padding: 0.25rem 0.5rem;
+            border: 2px solid rgb(122, 52, 202);
+            background-color: black;
+            color: rgb(122, 52, 202);
+            cursor: pointer;
+            font-size: 2rem;
+            min-width: 3rem;
+            height: 5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .perception-nav-button:disabled {
+            border-color: #4a5568;
+            color: #4a5568;
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+        .perception-nav-button:hover:not(:disabled) {
+            background-color: rgb(122, 52, 202);
+            color: white;
+            transform: scale(1.1);
+        }
+        .button-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        .button-stack .button {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.875rem;
+            min-width: 6rem;
+        }
+    </style>
+</head>
+<body class="bg-black text-white">
+    <div id="root" class="container mx-auto p-4"></div>
+
+    <script src="/static/react.production.min.js"></script>
+    <script src="/static/react-dom.production.min.js"></script>
+
+    <script>
+        const { useState, useEffect } = React;
+
+        function App() {
+            const [screenshots, setScreenshots] = useState([]);
+            const [searchQuery, setSearchQuery] = useState('');
+            const [currentPage, setCurrentPage] = useState(1);
+            const [screenshotsPerPage, setScreenshotsPerPage] = useState(12);
+            const [sortConfig, setSortConfig] = useState(null);
+            const [showHashModal, setShowHashModal] = useState(false);
+            const [selectedHashes, setSelectedHashes] = useState(new Set());
+            const [selectedScreenshot, setSelectedScreenshot] = useState(null);
+
+            useEffect(() => {
+                fetch("/screenshots/index.json")
+                    .then(response => response.json())
+                    .then(data => setScreenshots(data));
+            }, []);
+
+            useEffect(() => {
+                setCurrentPage(1);
+            }, [selectedHashes, searchQuery]);
+
+            const filteredScreenshots = Object.entries(screenshots)
+                .filter(([id, value]) => 
+                    (selectedHashes.size === 0 || selectedHashes.has(value.hash)) &&
+                    (value.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                    value.url.toLowerCase().includes(searchQuery.toLowerCase()))
+                );
+
+            const sortedScreenshots = sortConfig ? [...filteredScreenshots].sort((a, b) => {
+                const [idA, valueA] = a;
+                const [idB, valueB] = b;
+                const key = sortConfig.key;
+
+                if (valueA[key] < valueB[key]) {
+                    return sortConfig.direction === 'ascending' ? -1 : 1;
+                }
+                if (valueA[key] > valueB[key]) {
+                    return sortConfig.direction === 'ascending' ? 1 : -1;
+                }
+                return 0;
+            }) : filteredScreenshots;
+
+            const indexOfLastScreenshot = currentPage * screenshotsPerPage;
+            const indexOfFirstScreenshot = indexOfLastScreenshot - screenshotsPerPage;
+            const currentScreenshots = sortedScreenshots.slice(
+                indexOfFirstScreenshot, 
+                screenshotsPerPage === -1 ? sortedScreenshots.length : indexOfLastScreenshot
+            );
+
+            const totalPages = Math.ceil(filteredScreenshots.length / screenshotsPerPage);
+
+            const handlePageChange = (pageNumber) => {
+                setCurrentPage(pageNumber);
+            };
+
+            const handlePageSizeChange = (event) => {
+                const newSize = Number(event.target.value);
+                setScreenshotsPerPage(newSize);
+                setCurrentPage(1); // Reset to first page on page size change
+            };
+
+            const handleSort = (key) => {
+                let direction = 'ascending';
+                if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
+                    direction = 'descending';
+                }
+                setSortConfig({ key, direction });
+            };
+
+            const showScreenshotDetail = (id) => {
+                setSelectedScreenshot(id);
+            };
+
+            return React.createElement('div', null,
+                React.createElement('a', { href: 'https://github.com/blacklanternsecurity/webcap', target: '_blank' },
+                    React.createElement('img', { 
+                        src: '/static/webcap.png', 
+                        alt: 'Webcap Logo', 
+                        style: { height: '12em' },
+                        className: 'mb-4' 
+                    })
+                ),
+                React.createElement('div', { className: 'bg-gray-900 p-6 rounded-lg' },
+                    React.createElement('div', { className: 'flex flex-col md:flex-row md:items-center space-y-4 md:space-y-0 md:space-x-4' },
+                        React.createElement('div', { className: 'w-full md:w-1/2' },
+                            React.createElement(SearchBar, { onSearch: setSearchQuery })
+                        ),
+                        React.createElement('div', { className: 'w-full md:w-1/2' },
+                            React.createElement(PerceptionWidget, {
+                                screenshots,
+                                selectedHashes,
+                                setSelectedHashes,
+                                onShowModal: () => setShowHashModal(true)
+                            })
+                        )
+                    ),
+                    React.createElement(ScreenshotList, { 
+                        screenshots: currentScreenshots, 
+                        onSort: handleSort,
+                        onScreenshotClick: showScreenshotDetail  // Pass the function as a prop
+                    }),
+                    React.createElement('div', { className: 'mt-4 flex justify-center' },
+                        React.createElement(Pagination, { 
+                            currentPage, 
+                            totalPages, 
+                            onPageChange: handlePageChange,
+                            onPageSizeChange: handlePageSizeChange
+                        })
+                    )
+                ),
+                showHashModal && React.createElement(HashModal, {
+                    screenshots,
+                    onClose: () => setShowHashModal(false),
+                    selectedHashes,
+                    setSelectedHashes
+                }),
+                selectedScreenshot && React.createElement(ScreenshotDetailModal, {
+                    screenshotId: selectedScreenshot,
+                    onClose: () => setSelectedScreenshot(null)
+                })
+            );
+        }
+
+        function SearchBar({ onSearch }) {
+            return React.createElement('input', {
+                type: 'text',
+                placeholder: 'Search screenshots...',
+                className: 'w-full p-2 border border-gray-700 rounded bg-gray-900 text-white h-16',
+                style: { height: '5rem' },
+                onChange: (e) => onSearch(e.target.value)
+            });
+        }
+
+        function ScreenshotList({ screenshots, onSort, onScreenshotClick }) {
+            return React.createElement('div', { className: 'p-4' },
+                React.createElement('div', { 
+                    className: 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 grid-flow-dense auto-rows-auto'
+                },
+                    screenshots.map(([id, screenshot]) => 
+                        React.createElement('div', { 
+                            key: id, 
+                            className: 'bg-gray-900 shadow-md overflow-hidden hover:shadow-lg transition-shadow cursor-pointer',
+                            onClick: () => onScreenshotClick(id)
+                        },
+                            React.createElement('img', {
+                                src: `/screenshots/${id}`,
+                                alt: screenshot.url,
+                                className: 'w-full h-auto'
+                            }),
+                            React.createElement('div', { className: 'p-4' },
+                                React.createElement('div', { className: 'flex items-center gap-2 mb-2' },
+                                    React.createElement('span', { 
+                                        className: `px-2 py-1 rounded text-sm ${
+                                            screenshot.status >= 200 && screenshot.status < 300 ? 'bg-green-900 text-green-300' :
+                                            screenshot.status >= 300 && screenshot.status < 400 ? 'bg-blue-900 text-blue-300' :
+                                            screenshot.status >= 400 ? 'bg-red-900 text-red-300' :
+                                            'bg-gray-700 text-gray-300'
+                                        }`
+                                    }, screenshot.status),
+                                    React.createElement('div', { 
+                                        className: 'text-white font-medium truncate flex-1'
+                                    }, screenshot.title)
+                                ),
+                                React.createElement('a', { 
+                                    href: screenshot.url, 
+                                    target: '_blank', 
+                                    rel: 'noopener noreferrer',
+                                    className: 'text-blue-500 hover:text-blue-400 text-sm truncate block'
+                                }, screenshot.url)
+                            )
+                        )
+                    )
+                )
+            );
+        }
+
+        function PageSizeSelector({ onPageSizeChange }) {
+            return React.createElement('select', { 
+                onChange: onPageSizeChange, 
+                className: 'ml-2 border border-gray-700 rounded bg-gray-900 text-white select-button'
+            },
+                [12, 16, 20, 24, 32, 48, 64, -1].map(size => 
+                    React.createElement('option', { key: size, value: size }, size === -1 ? 'Show All' : `${size} per page`)
+                )
+            );
+        }
+
+        function Pagination({ currentPage, totalPages, onPageChange, onPageSizeChange }) {
+            const pageNumbers = [];
+            const maxPageButtons = 5; // Number of page buttons to display
+
+            let startPage = Math.max(1, currentPage - Math.floor(maxPageButtons / 2));
+            let endPage = Math.min(totalPages, startPage + maxPageButtons - 1);
+
+            if (endPage - startPage < maxPageButtons - 1) {
+                startPage = Math.max(1, endPage - maxPageButtons + 1);
+            }
+
+            for (let i = startPage; i <= endPage; i++) {
+                pageNumbers.push(i);
+            }
+
+            return React.createElement('div', { className: 'flex items-center space-x-2' },
+                React.createElement('button', { 
+                    onClick: () => onPageChange(1), 
+                    disabled: currentPage === 1,
+                    className: `button ${currentPage === 1 ? 'active' : ''}`
+                }, 'First'),
+                pageNumbers.map(number => 
+                    React.createElement('button', { 
+                        key: number, 
+                        onClick: () => onPageChange(number),
+                        disabled: number === currentPage,
+                        className: `button ${number === currentPage ? 'active' : ''}`
+                    }, number)
+                ),
+                React.createElement('button', { 
+                    onClick: () => onPageChange(totalPages), 
+                    disabled: currentPage === totalPages,
+                    className: `button ${currentPage === totalPages ? 'active' : ''}`
+                }, 'Last'),
+                React.createElement(PageSizeSelector, { onPageSizeChange: onPageSizeChange })
+            );
+        }
+
+        function HashModal({ screenshots, onClose, selectedHashes, setSelectedHashes }) {
+            // Group screenshots by hash and sort by count descending
+            const hashGroups = Object.entries(screenshots)
+                .reduce((acc, [id, value]) => {
+                    if (!acc[value.hash]) {
+                        acc[value.hash] = [];
+                    }
+                    acc[value.hash].push({ id, ...value });
+                    return acc;
+                }, {});
+
+            // Convert to array and sort by count descending
+            const sortedHashGroups = Object.entries(hashGroups)
+                .sort(([, groupA], [, groupB]) => groupB.length - groupA.length);
+
+            const toggleHash = (hash) => {
+                const newSelected = new Set(selectedHashes);
+                if (newSelected.has(hash)) {
+                    newSelected.delete(hash);
+                } else {
+                    newSelected.add(hash);
+                }
+                setSelectedHashes(newSelected);
+            };
+
+            return React.createElement('div', { 
+                className: 'modal',
+                onClick: (e) => {
+                    if (e.target === e.currentTarget) {
+                        onClose();
+                    }
+                }
+            },
+                React.createElement('div', { 
+                    className: 'modal-content'
+                },
+                    React.createElement('div', { className: 'flex justify-between mb-4' },
+                        React.createElement('h2', { className: 'text-xl' }, 'Perception Hash Groups'),
+                        React.createElement('button', {
+                            className: 'button',
+                            onClick: onClose
+                        }, '×')
+                    ),
+                    sortedHashGroups.map(([hash, group]) =>
+                        React.createElement('div', { 
+                            key: hash,
+                            className: 'hash-group',
+                            onClick: () => toggleHash(hash)
+                        },
+                            React.createElement('div', { className: 'flex items-center space-x-4' },
+                                React.createElement('input', {
+                                    type: 'checkbox',
+                                    checked: selectedHashes.has(hash),
+                                    onChange: (e) => {
+                                        e.stopPropagation();
+                                        toggleHash(hash);
+                                    },
+                                    className: 'hash-checkbox'
+                                }),
+                                React.createElement('img', {
+                                    className: 'screenshot-thumbnail',
+                                    src: `/screenshots/${group[0].id}`,
+                                    alt: 'Representative thumbnail'
+                                }),
+                                React.createElement('div', null,
+                                    React.createElement('div', null, group[0].title || 'Untitled'),
+                                    React.createElement('div', null, `${group.length} similar`)
+                                )
+                            )
+                        )
+                    )
+                )
+            );
+        }
+
+        function PerceptionWidget({ screenshots, selectedHashes, setSelectedHashes, onShowModal }) {
+            // Group and sort hashes like in the modal
+            const hashGroups = Object.entries(screenshots)
+                .reduce((acc, [id, value]) => {
+                    if (!acc[value.hash]) {
+                        acc[value.hash] = [];
+                    }
+                    acc[value.hash].push({ id, ...value });
+                    return acc;
+                }, {});
+
+            const sortedHashes = Object.entries(hashGroups)
+                .sort(([, groupA], [, groupB]) => groupB.length - groupA.length)
+                .map(([hash]) => hash);
+
+            // Get current hash index
+            const currentHashIndex = selectedHashes.size === 1 
+                ? sortedHashes.indexOf(Array.from(selectedHashes)[0])
+                : -1;
+
+            const navigateHash = (direction) => {
+                let newIndex;
+                if (currentHashIndex === -1) {
+                    newIndex = direction === 'next' ? 0 : sortedHashes.length - 1;
+                } else {
+                    newIndex = direction === 'next' 
+                        ? (currentHashIndex + 1) % sortedHashes.length
+                        : (currentHashIndex - 1 + sortedHashes.length) % sortedHashes.length;
+                }
+                setSelectedHashes(new Set([sortedHashes[newIndex]]));
+            };
+
+            const clearSelection = () => {
+                setSelectedHashes(new Set());
+            };
+
+            // Get current group info
+            const currentHash = currentHashIndex !== -1 ? sortedHashes[currentHashIndex] : null;
+            const currentGroup = currentHash ? hashGroups[currentHash] : null;
+
+            return React.createElement('div', { className: 'perception-widget' },
+                React.createElement('button', {
+                    className: 'perception-nav-button',
+                    onClick: () => navigateHash('prev'),
+                    disabled: sortedHashes.length === 0
+                }, '<'),
+
+                React.createElement('div', { className: 'perception-preview' },
+                    currentGroup 
+                        ? React.createElement('div', { className: 'flex items-center space-x-4' },
+                            React.createElement('img', {
+                                src: `/screenshots/${currentGroup[0].id}`,
+                                alt: 'Preview'
+                            }),
+                            React.createElement('div', { className: 'text-content' },
+                                React.createElement('div', { className: 'title' }, 
+                                    currentGroup[0].title || 'Untitled'
+                                ),
+                                React.createElement('div', null, 
+                                    `${currentGroup.length} similar`
+                                )
+                            )
+                        )
+                        : React.createElement('div', { className: 'text-gray-500' }, 
+                            'No perception filter active'
+                        )
+                ),
+
+                React.createElement('div', { className: 'button-stack' },
+                    React.createElement('button', {
+                        className: 'button',
+                        onClick: clearSelection,
+                        disabled: selectedHashes.size === 0
+                    }, 'Clear'),
+                    React.createElement('button', {
+                        className: 'button',
+                        onClick: onShowModal
+                    }, 'Select Custom')
+                ),
+                
+                React.createElement('button', {
+                    className: 'perception-nav-button',
+                    onClick: () => navigateHash('next'),
+                    disabled: sortedHashes.length === 0
+                }, '>')
+            );
+        }
+
+        function ScreenshotDetailModal({ screenshotId, onClose }) {
+            const [details, setDetails] = useState(null);
+
+            useEffect(() => {
+                fetch(`/screenshots/json/${screenshotId}.json`)
+                    .then(response => response.json())
+                    .then(data => setDetails(data));
+            }, [screenshotId]);
+
+            if (!details) return null;
+
+            const finalNavigation = details.navigation_history
+                .filter(nav => nav.status === 200)
+                .pop();
+            const httpTitle = finalNavigation?.title || details.title || 'Untitled';
+
+            return React.createElement('div', {
+                className: 'modal',
+                onClick: (e) => {
+                    if (e.target === e.currentTarget) onClose();
+                }
+            },
+                React.createElement('div', {
+                    className: 'modal-content max-w-6xl w-full bg-gray-900 border border-gray-700'
+                },
+                    React.createElement('div', { className: 'flex justify-between items-center mb-6 border-b border-gray-700 pb-4' },
+                        React.createElement('h1', { 
+                            className: 'text-2xl font-bold text-white truncate max-w-[90%]' 
+                        }, httpTitle),
+                        React.createElement('button', {
+                            className: 'button',
+                            onClick: onClose
+                        }, '×')
+                    ),
+                    React.createElement('img', {
+                        src: `/screenshots/${screenshotId}`,
+                        alt: details.title || details.url,
+                        className: 'w-full h-auto mb-6 border border-gray-700'
+                    }),
+                    React.createElement('div', { className: 'space-y-6' },
+                      React.createElement('div', { className: 'pt-4 border-t border-gray-700' },
+                              React.createElement('div', { className: 'grid grid-cols-2 gap-4' },
+                                  React.createElement('div', null,
+                                      React.createElement('span', { className: 'text-gray-400' }, 'Initial URL: '),
+                                      React.createElement('a', {
+                                          href: details.url,
+                                          target: '_blank',
+                                          rel: 'noopener noreferrer',
+                                          className: 'text-blue-400 hover:text-blue-300'
+                                      }, details.url)
+                                  ),
+                                  React.createElement('div', null,
+                                      React.createElement('span', { className: 'text-gray-400' }, 'Final URL: '),
+                                      React.createElement('a', {
+                                          href: details.final_url,
+                                          target: '_blank',
+                                          rel: 'noopener noreferrer',
+                                          className: 'text-blue-400 hover:text-blue-300'
+                                      }, details.final_url)
+                                  )
+                              )
+                          ),
+                        React.createElement('div', { className: 'space-y-2' },
+                            React.createElement('h3', { className: 'text-lg font-semibold text-gray-300' }, 'Navigation Flow'),
+                            React.createElement('div', { className: 'space-y-4' },
+                                details.navigation_history.map((nav, index) =>
+                                    React.createElement('div', { 
+                                        key: index,
+                                        className: 'bg-gray-800 p-4 rounded-lg border border-gray-700'
+                                    },
+                                        React.createElement('div', { className: 'flex items-center gap-3 mb-2' },
+                                            React.createElement('span', { 
+                                                className: `px-2 py-1 rounded text-sm ${
+                                                    nav.status >= 200 && nav.status < 300 ? 'bg-green-900 text-green-300' :
+                                                    nav.status >= 300 && nav.status < 400 ? 'bg-blue-900 text-blue-300' :
+                                                    nav.status >= 400 ? 'bg-red-900 text-red-300' :
+                                                    'bg-gray-700 text-gray-300'
+                                                }`
+                                            }, nav.status),
+                                            nav.mimeType && React.createElement('span', { 
+                                                className: 'text-sm text-gray-400'
+                                            }, nav.mimeType)
+                                        ),
+                                        React.createElement('a', {
+                                            href: nav.url,
+                                            target: '_blank',
+                                            rel: 'noopener noreferrer',
+                                            className: 'text-blue-400 hover:text-blue-300 break-all'
+                                        }, nav.url),
+                                        nav.location && React.createElement('div', { className: 'mt-2' },
+                                            React.createElement('span', { className: 'text-gray-400' }, '→ Redirects to: '),
+                                            React.createElement('a', {
+                                                href: nav.location,
+                                                target: '_blank',
+                                                rel: 'noopener noreferrer',
+                                                className: 'text-blue-400 hover:text-blue-300 break-all'
+                                            }, nav.location)
+                                        )
+                                    )
+                                )
+                            )
+                        ),
+
+                    )
+                )
+            );
+        }
+
+        ReactDOM.render(React.createElement(App), document.getElementById('root'));
+    </script>
+</body>
+</html>

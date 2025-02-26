@@ -1,18 +1,31 @@
 [tool.poetry]
 name = "webcap"
 version = "0.1.0"
-description = ""
+description = "An ultra-lightweight web screenshot tool written in Python"
 authors = ["TheTechromancer"]
+repository = "https://github.com/blacklanternsecurity/webcap"
+homepage = "https://github.com/blacklanternsecurity/webcap"
 license = "GPL-v3.0"
 readme = "README.md"
+keywords = ["python", "cli", "web", "screenshot", "osint", "ocr", "bug-bounty", "bugbounty", "headless", "web-browser", "scanner", "python-library", "hacking", "pentesting", "recon"]
+classifiers = [
+    "Operating System :: POSIX :: Linux",
+    "Topic :: Security",
+]
 
 [tool.poetry.dependencies]
-python = ">=3.9,<3.13"
-httpx = "^0.28.1"
+python = ">=3.9,<3.14"
+httpx = "^0.28.0"
 websockets = "^14.1"
-orjson = "^3.10.14"
-extractous = "^0.3.0"
+orjson = "^3.10.12"
 uvloop = "^0.21.0"
+fastapi = "^0.115.6"
+uvicorn = "^0.34.0"
+rich = "^13.9.4"
+typer = "^0.15.1"
+extractous = "^0.3.0"
+pillow = "^11.1.0"
+numpy = ">=2.0.2,<2.1.0"
 
 [tool.poetry.scripts]
 webcap = "webcap.cli:main"
@@ -27,6 +40,7 @@ pytest-httpserver = "^1.1.0"
 pytest-asyncio = "^0.25.2"
 poetry-dynamic-versioning = "^1.4.1"
 pytest-cov = "^6.0.0"
+lxml = "^5.3.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning"]

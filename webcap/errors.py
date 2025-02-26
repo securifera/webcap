@@ -4,3 +4,7 @@ class WebCapError(Exception):
 
 class DevToolsProtocolError(WebCapError):
     pass
+
+
+class ScreenshotDirError(WebCapError):
+    pass
