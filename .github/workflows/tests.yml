@@ -100,7 +100,7 @@ jobs:
         shell: bash
       - name: Build PyPi package
         if: github.ref == 'refs/heads/master'
-        run: python -m build
+        run: poetry build
       - name: Publish PyPi package
         if: github.ref == 'refs/heads/master'
         uses: pypa/gh-action-pypi-publish@release/v1.12
