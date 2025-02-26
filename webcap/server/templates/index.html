@@ -91,7 +91,7 @@
             gap: 0.5rem;
             padding: 0.5rem;
             min-width: auto;
-            flex-wrap: wrap;
+            flex-wrap: nowrap;  /* Prevent wrapping */
         }
         .perception-preview {
             display: flex;
@@ -101,6 +101,7 @@
             min-width: auto;
             height: 6rem;
             flex: 1;
+            min-width: 0;  /* Allow content to shrink below min-content width */
         }
         .perception-preview img {
             width: 6rem;
@@ -156,7 +157,6 @@
 <body class="bg-black text-white">
     <div id="root" class="container mx-auto p-4"></div>
 
-    <!-- React and ReactDOM from CDN -->
     <script src="/static/react.production.min.js"></script>
     <script src="/static/react-dom.production.min.js"></script>
 
@@ -167,10 +167,11 @@
             const [screenshots, setScreenshots] = useState([]);
             const [searchQuery, setSearchQuery] = useState('');
             const [currentPage, setCurrentPage] = useState(1);
-            const [screenshotsPerPage, setScreenshotsPerPage] = useState(10);
+            const [screenshotsPerPage, setScreenshotsPerPage] = useState(12);
             const [sortConfig, setSortConfig] = useState(null);
             const [showHashModal, setShowHashModal] = useState(false);
             const [selectedHashes, setSelectedHashes] = useState(new Set());
+            const [selectedScreenshot, setSelectedScreenshot] = useState(null);
 
             useEffect(() => {
                 fetch("/screenshots/index.json")
@@ -230,6 +231,10 @@
                 setSortConfig({ key, direction });
             };
 
+            const showScreenshotDetail = (id) => {
+                setSelectedScreenshot(id);
+            };
+
             return React.createElement('div', null,
                 React.createElement('a', { href: 'https://github.com/blacklanternsecurity/webcap', target: '_blank' },
                     React.createElement('img', { 
@@ -240,11 +245,11 @@
                     })
                 ),
                 React.createElement('div', { className: 'bg-gray-900 p-6 rounded-lg' },
-                    React.createElement('div', { className: 'flex items-center space-x-4' },
-                        React.createElement('div', { className: 'w-1/2' },
+                    React.createElement('div', { className: 'flex flex-col md:flex-row md:items-center space-y-4 md:space-y-0 md:space-x-4' },
+                        React.createElement('div', { className: 'w-full md:w-1/2' },
                             React.createElement(SearchBar, { onSearch: setSearchQuery })
                         ),
-                        React.createElement('div', { className: 'w-1/2' },
+                        React.createElement('div', { className: 'w-full md:w-1/2' },
                             React.createElement(PerceptionWidget, {
                                 screenshots,
                                 selectedHashes,
@@ -253,7 +258,11 @@
                             })
                         )
                     ),
-                    React.createElement(ScreenshotList, { screenshots: currentScreenshots, onSort: handleSort }),
+                    React.createElement(ScreenshotList, { 
+                        screenshots: currentScreenshots, 
+                        onSort: handleSort,
+                        onScreenshotClick: showScreenshotDetail  // Pass the function as a prop
+                    }),
                     React.createElement('div', { className: 'mt-4 flex justify-center' },
                         React.createElement(Pagination, { 
                             currentPage, 
@@ -268,6 +277,10 @@
                     onClose: () => setShowHashModal(false),
                     selectedHashes,
                     setSelectedHashes
+                }),
+                selectedScreenshot && React.createElement(ScreenshotDetailModal, {
+                    screenshotId: selectedScreenshot,
+                    onClose: () => setSelectedScreenshot(null)
                 })
             );
         }
@@ -282,35 +295,45 @@
             });
         }
 
-        function ScreenshotList({ screenshots, onSort }) {
-            return React.createElement('table', { className: 'w-full mb-4 border-collapse' },
-                React.createElement('thead', null,
-                    React.createElement('tr', { className: 'bg-gray-800' },
-                        React.createElement('th', { className: 'p-2 border-b border-gray-700 cursor-pointer', onClick: () => onSort('thumbnail') }, 'Thumbnail'),
-                        React.createElement('th', { className: 'p-2 border-b border-gray-700 cursor-pointer', onClick: () => onSort('status') }, 'Status Code'),
-                        React.createElement('th', { className: 'p-2 border-b border-gray-700 cursor-pointer', onClick: () => onSort('title') }, 'Title'),
-                        React.createElement('th', { className: 'p-2 border-b border-gray-700 cursor-pointer', onClick: () => onSort('url') }, 'URL')
+        function ScreenshotList({ screenshots, onSort, onScreenshotClick }) {
+            return React.createElement('div', { className: 'p-4' },
+                React.createElement('div', { 
+                    className: 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 grid-flow-dense auto-rows-auto'
+                },
+                    screenshots.map(([id, screenshot]) => 
+                        React.createElement('div', { 
+                            key: id, 
+                            className: 'bg-gray-900 shadow-md overflow-hidden hover:shadow-lg transition-shadow cursor-pointer',
+                            onClick: () => onScreenshotClick(id)
+                        },
+                            React.createElement('img', {
+                                src: `/screenshots/${id}`,
+                                alt: screenshot.url,
+                                className: 'w-full h-auto'
+                            }),
+                            React.createElement('div', { className: 'p-4' },
+                                React.createElement('div', { className: 'flex items-center gap-2 mb-2' },
+                                    React.createElement('span', { 
+                                        className: `px-2 py-1 rounded text-sm ${
+                                            screenshot.status >= 200 && screenshot.status < 300 ? 'bg-green-900 text-green-300' :
+                                            screenshot.status >= 300 && screenshot.status < 400 ? 'bg-blue-900 text-blue-300' :
+                                            screenshot.status >= 400 ? 'bg-red-900 text-red-300' :
+                                            'bg-gray-700 text-gray-300'
+                                        }`
+                                    }, screenshot.status),
+                                    React.createElement('div', { 
+                                        className: 'text-white font-medium truncate flex-1'
+                                    }, screenshot.title)
+                                ),
+                                React.createElement('a', { 
+                                    href: screenshot.url, 
+                                    target: '_blank', 
+                                    rel: 'noopener noreferrer',
+                                    className: 'text-blue-500 hover:text-blue-400 text-sm truncate block'
+                                }, screenshot.url)
+                            )
+                        )
                     )
-                ),
-                React.createElement('tbody', null,
-                    screenshots.map(([id, value]) => 
-                        React.createElement(ScreenshotItem, { key: id, id: id, value: value })
-                    )
-                )
-            );
-        }
-
-        function ScreenshotItem({ id, value }) {
-            return React.createElement('tr', { className: 'hover:bg-gray-800' },
-                React.createElement('td', { className: 'p-2 border-b border-gray-700' },
-                    React.createElement('img', { className: 'screenshot-thumbnail', src: `/screenshots/${id}`, alt: 'thumbnail' })
-                ),
-                React.createElement('td', { className: 'p-2 border-b border-gray-700 font-bold' }, value.status),
-                React.createElement('td', { className: 'p-2 border-b border-gray-700' },
-                    React.createElement('a', { href: `/screenshots/json/${id}.json`, target: '_blank', className: 'text-white font-bold' }, value.title)
-                ),
-                React.createElement('td', { className: 'p-2 border-b border-gray-700' },
-                    React.createElement('a', { href: value.url, target: '_blank', className: 'text-white' }, value.url)
                 )
             );
         }
@@ -320,7 +343,7 @@
                 onChange: onPageSizeChange, 
                 className: 'ml-2 border border-gray-700 rounded bg-gray-900 text-white select-button'
             },
-                [10, 20, 50, 100, -1].map(size => 
+                [12, 16, 20, 24, 32, 48, 64, -1].map(size => 
                     React.createElement('option', { key: size, value: size }, size === -1 ? 'Show All' : `${size} per page`)
                 )
             );
@@ -524,6 +547,114 @@
                     onClick: () => navigateHash('next'),
                     disabled: sortedHashes.length === 0
                 }, '>')
+            );
+        }
+
+        function ScreenshotDetailModal({ screenshotId, onClose }) {
+            const [details, setDetails] = useState(null);
+
+            useEffect(() => {
+                fetch(`/screenshots/json/${screenshotId}.json`)
+                    .then(response => response.json())
+                    .then(data => setDetails(data));
+            }, [screenshotId]);
+
+            if (!details) return null;
+
+            const finalNavigation = details.navigation_history
+                .filter(nav => nav.status === 200)
+                .pop();
+            const httpTitle = finalNavigation?.title || details.title || 'Untitled';
+
+            return React.createElement('div', {
+                className: 'modal',
+                onClick: (e) => {
+                    if (e.target === e.currentTarget) onClose();
+                }
+            },
+                React.createElement('div', {
+                    className: 'modal-content max-w-6xl w-full bg-gray-900 border border-gray-700'
+                },
+                    React.createElement('div', { className: 'flex justify-between items-center mb-6 border-b border-gray-700 pb-4' },
+                        React.createElement('h1', { 
+                            className: 'text-2xl font-bold text-white truncate max-w-[90%]' 
+                        }, httpTitle),
+                        React.createElement('button', {
+                            className: 'button',
+                            onClick: onClose
+                        }, '×')
+                    ),
+                    React.createElement('img', {
+                        src: `/screenshots/${screenshotId}`,
+                        alt: details.title || details.url,
+                        className: 'w-full h-auto mb-6 border border-gray-700'
+                    }),
+                    React.createElement('div', { className: 'space-y-6' },
+                      React.createElement('div', { className: 'pt-4 border-t border-gray-700' },
+                              React.createElement('div', { className: 'grid grid-cols-2 gap-4' },
+                                  React.createElement('div', null,
+                                      React.createElement('span', { className: 'text-gray-400' }, 'Initial URL: '),
+                                      React.createElement('a', {
+                                          href: details.url,
+                                          target: '_blank',
+                                          rel: 'noopener noreferrer',
+                                          className: 'text-blue-400 hover:text-blue-300'
+                                      }, details.url)
+                                  ),
+                                  React.createElement('div', null,
+                                      React.createElement('span', { className: 'text-gray-400' }, 'Final URL: '),
+                                      React.createElement('a', {
+                                          href: details.final_url,
+                                          target: '_blank',
+                                          rel: 'noopener noreferrer',
+                                          className: 'text-blue-400 hover:text-blue-300'
+                                      }, details.final_url)
+                                  )
+                              )
+                          ),
+                        React.createElement('div', { className: 'space-y-2' },
+                            React.createElement('h3', { className: 'text-lg font-semibold text-gray-300' }, 'Navigation Flow'),
+                            React.createElement('div', { className: 'space-y-4' },
+                                details.navigation_history.map((nav, index) =>
+                                    React.createElement('div', { 
+                                        key: index,
+                                        className: 'bg-gray-800 p-4 rounded-lg border border-gray-700'
+                                    },
+                                        React.createElement('div', { className: 'flex items-center gap-3 mb-2' },
+                                            React.createElement('span', { 
+                                                className: `px-2 py-1 rounded text-sm ${
+                                                    nav.status >= 200 && nav.status < 300 ? 'bg-green-900 text-green-300' :
+                                                    nav.status >= 300 && nav.status < 400 ? 'bg-blue-900 text-blue-300' :
+                                                    nav.status >= 400 ? 'bg-red-900 text-red-300' :
+                                                    'bg-gray-700 text-gray-300'
+                                                }`
+                                            }, nav.status),
+                                            nav.mimeType && React.createElement('span', { 
+                                                className: 'text-sm text-gray-400'
+                                            }, nav.mimeType)
+                                        ),
+                                        React.createElement('a', {
+                                            href: nav.url,
+                                            target: '_blank',
+                                            rel: 'noopener noreferrer',
+                                            className: 'text-blue-400 hover:text-blue-300 break-all'
+                                        }, nav.url),
+                                        nav.location && React.createElement('div', { className: 'mt-2' },
+                                            React.createElement('span', { className: 'text-gray-400' }, '→ Redirects to: '),
+                                            React.createElement('a', {
+                                                href: nav.location,
+                                                target: '_blank',
+                                                rel: 'noopener noreferrer',
+                                                className: 'text-blue-400 hover:text-blue-300 break-all'
+                                            }, nav.location)
+                                        )
+                                    )
+                                )
+                            )
+                        ),
+
+                    )
+                )
             );
         }
 

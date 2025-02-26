@@ -90,7 +90,7 @@ def sanitize_filename(filename):
     filename = str(filename)
     filename = sub_regex.sub("-", filename)
     # collapse multiple underscores
-    filename = sub_regex_multiple.sub("-", filename)
+    filename = sub_regex_multiple.sub("-", filename).strip("-")
     filename = str(truncate_filename(filename, 240))
     return filename
 

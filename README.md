@@ -18,11 +18,11 @@ WebCap's most unique feature is its ability to capture not only the **fully-rend
 
 ### Web Interface (`webcap server`)
 
-![Image](https://github.com/user-attachments/assets/dd9f6829-f117-43f7-927b-4e77ff9b2c2a)
+https://github.com/user-attachments/assets/a5dea3fb-fa01-41e7-90cd-67c6efa3d6e5
 
 ### CLI Interface (`webcap scan`)
 
-![image](https://github.com/user-attachments/assets/c5a409ea-d068-45d7-a4c1-8a8cddf6c491)
+![webcap_gif](https://github.com/user-attachments/assets/1eb7270f-e2f4-4d9e-979b-2b571ca20478)
 
 #### Fully-rendered DOM
 
@@ -54,7 +54,7 @@ WebCap's most unique feature is its ability to capture not only the **fully-rend
 - [x] Fuzzy (perception) hashing
 - [ ] Technology detection
 - [x] OCR text extraction
-- [ ] Web interface
+- [x] Web interface
 
 ### Example Commands
 
