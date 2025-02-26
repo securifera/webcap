@@ -133,7 +133,7 @@ def scan(
         float,
         typer.Option(
             "--delay",
-            help=f"Delay before capturing (default: {defaults.delay:.1f} seconds)",
+            help=f"Delay before capturing",
             metavar="SECONDS",
             rich_help_panel="Performance",
         ),
