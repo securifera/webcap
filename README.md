@@ -4,6 +4,10 @@
 
 **WebCap** is an extremely lightweight headless web screenshot tool. It doesn't require Selenium, Playwright, Puppeteer, or any other browser automation framework; all it needs is a working Chrome installation. Used by [BBOT](https://github.com/blacklanternsecurity/bbot).
 
+### Features
+
+WebCap's most unique feature is its ability to capture not only the **fully-rendered DOM**, but also every snippet of **parsed Javascript** (regardless of inline or external), and the **full content** of every HTTP request + response (including Javascript API calls etc.). For convenience, it can output directly to JSON.
+
 ### Installation
 
 ```bash
@@ -43,10 +47,6 @@ webcap server
 
 # Browse to http://localhost:8000
 ```
-
-### Features
-
-WebCap's most unique feature is its ability to capture not only the **fully-rendered DOM**, but also every snippet of **parsed Javascript** (regardless of inline or external), and the **full content** of every HTTP request + response (including Javascript API calls etc.). For convenience, it can output directly to JSON.
 
 # Screenshots
 
