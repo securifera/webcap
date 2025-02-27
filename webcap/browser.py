@@ -218,7 +218,7 @@ class Browser(WebCapBase):
     async def _send_request(self, request):
         if self.websocket is None:
             raise WebCapError("You must call start() on the browser before making a request")
-        self.log.info(f"SENDING REQUEST: {request}")
+        # self.log.debug(f"Sending request: {request}")
         await self.websocket.send(orjson.dumps(request).decode("utf-8"))
 
     async def detect_chrome_path(self):
@@ -238,7 +238,7 @@ class Browser(WebCapBase):
                     version_output = stdout.decode().strip()
                     match = self.chrome_version_regex.search(version_output)
                     if match:
-                        self.log.info(f"Found Chrome version {match.group(1)}")
+                        self.log.info(f"Found Chrome version {match.group(1)} at {chrome_path}")
                         self.version = match.group(1)
                         self.chrome_path = chrome_path
                         break
@@ -303,11 +303,11 @@ class Browser(WebCapBase):
             while self.websocket and not self._closed:
                 message = await self.websocket.recv()
                 response = orjson.loads(message)
-                self.log.info(f"GOT MESSAGE: {response}")
+                # self.log.debug(f"Got message: {response}")
                 await self.handle_event(response)
 
         except websockets.ConnectionClosed as e:
-            self.log.info(f"WebSocket connection closed: {e}")
+            self.log.debug(f"WebSocket connection closed: {e}")
         except Exception as e:
             self.log.critical(f"Error in message handler: {e}")
             import traceback
@@ -318,7 +318,7 @@ class Browser(WebCapBase):
 
     async def stop(self):
         if not self._closed:
-            self.log.info("STOPPING BROWSER")
+            self.log.debug("Stopping browser")
             if self.websocket:
                 with suppress(Exception):
                     await self.websocket.close()

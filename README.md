@@ -114,40 +114,51 @@ if __name__ == "__main__":
 ## CLI Usage (--help)
 
 ```
- Usage: webcap scan [OPTIONS] URLS                                                                                                                                                            
-                                                                                                                                                                                              
- Screenshot URLs                                                                                                                                                                              
-                                                                                                                                                                                              
-╭─ Arguments ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ *    urls      TEXT  URL(s) to capture, or file(s) containing URLs [default: None] [required]                                                                                              │
-╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭─ Options ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ --json    -j                  Output JSON                                                                                                                                                  │
-│ --chrome  -c      TEXT        Path to Chrome executable [default: None]                                                                                                                    │
-│ --output  -o      OUTPUT_DIR  Output directory [default: /home/bls/Downloads/code/webcap/screenshots]                                                                                      │
-│ --help                        Show this message and exit.                                                                                                                                  │
-╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭─ Screenshots ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ --resolution      -r      RESOLUTION  Resolution to capture [default: 1440x900]                                                                                                            │
-│ --full-page       -f                  Capture the full page (larger resolution images)                                                                                                     │
-│ --no-screenshots                      Only visit the sites; don't capture screenshots (useful with -j/--json)                                                                              │
-╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭─ Performance ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ --threads  -t      INTEGER  Number of threads to use [default: 15]                                                                                                                         │
-│ --delay            SECONDS  Delay before capturing (default: 3.0 seconds) [default: 3.0]                                                                                                   │
-╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭─ HTTP ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ --user-agent  -U      TEXT  User agent to use [default: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36]                   │
-│ --headers     -H      TEXT  Additional headers to send in format: 'Header-Name: Header-Value' (multiple supported)                                                                         │
-│ --proxy       -p      TEXT  HTTP proxy to use [default: None]                                                                                                                              │
-╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭─ JSON (Only apply when -j/--json is used) ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ --base64        -b                     Output each screenshot as base64                                                                                                                    │
-│ --dom           -d                     Capture the fully-rendered DOM                                                                                                                      │
-│ --responses     -rs                    Capture the full body of each HTTP response (including API calls etc.)                                                                              │
-│ --requests      -rq                    Capture the full body of each HTTP request (including API calls etc.)                                                                               │
-│ --javascript    -J                     Capture every snippet of Javascript (inline + external)                                                                                             │
-│ --ignore-types                   TEXT  Capture the full body of each HTTP response (including API calls etc.) [default: Image, Media, Font, Stylesheet]                                    │
-│ --ocr                --no-ocr          Extract text from screenshots [default: no-ocr]                                                                                                     │
-╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+ Usage: webcap scan [OPTIONS] URLS                                                            
+                                                                                              
+ Screenshot URLs                                                                              
+                                                                                              
+╭─ Arguments ────────────────────────────────────────────────────────────────────────────────╮
+│ *    urls      TEXT  URL(s) to capture, or file(s) containing URLs [default: None]         │
+│                      [required]                                                            │
+╰────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ──────────────────────────────────────────────────────────────────────────────────╮
+│ --json    -j                  Output JSON                                                  │
+│ --chrome  -c      TEXT        Path to Chrome executable [default: None]                    │
+│ --output  -o      OUTPUT_DIR  Output directory                                             │
+│                               [default: /home/bls/Downloads/code/webcap/screenshots]       │
+│ --help                        Show this message and exit.                                  │
+╰────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Screenshots ──────────────────────────────────────────────────────────────────────────────╮
+│ --resolution      -r      RESOLUTION  Resolution to capture [default: 1440x900]            │
+│ --full-page       -f                  Capture the full page (larger resolution images)     │
+│ --no-screenshots                      Only visit the sites; don't capture screenshots      │
+│                                       (useful with -j/--json)                              │
+╰────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Performance ──────────────────────────────────────────────────────────────────────────────╮
+│ --threads  -t      INTEGER  Number of threads to use [default: 15]                         │
+│ --delay            SECONDS  Delay before capturing (default: 3.0 seconds) [default: 3.0]   │
+╰────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ HTTP ─────────────────────────────────────────────────────────────────────────────────────╮
+│ --user-agent  -U      TEXT  User agent to use                                              │
+│                             [default: Mozilla/5.0 (Windows NT 10.0; Win64; x64)            │
+│                             AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0        │
+│                             Safari/537.36]                                                 │
+│ --headers     -H      TEXT  Additional headers to send in format: 'Header-Name:            │
+│                             Header-Value' (multiple supported)                             │
+│ --proxy       -p      TEXT  HTTP proxy to use [default: None]                              │
+╰────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ JSON (Only apply when -j/--json is used) ─────────────────────────────────────────────────╮
+│ --base64        -b                     Output each screenshot as base64                    │
+│ --dom           -d                     Capture the fully-rendered DOM                      │
+│ --responses     -rs                    Capture the full body of each HTTP response         │
+│                                        (including API calls etc.)                          │
+│ --requests      -rq                    Capture the full body of each HTTP request          │
+│                                        (including API calls etc.)                          │
+│ --javascript    -J                     Capture every snippet of Javascript (inline +       │
+│                                        external)                                           │
+│ --ignore-types                   TEXT  Ignore these filetypes                              │
+│                                        [default: Image, Media, Font, Stylesheet]           │
+│ --ocr                --no-ocr          Extract text from screenshots [default: no-ocr]     │
+╰────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
