@@ -188,6 +188,7 @@ class Tab(WebCapBase):
         await self.request("Page.navigate", url=url)
         # wait for the page to load
         await self.wait_for_page_load()
+
         # await self.get_technologies()
 
     async def wait_for_page_load(self):
@@ -198,6 +199,7 @@ class Tab(WebCapBase):
             if self._page_loaded and time.time() - self._last_active_time > 1:
                 break
             await asyncio.sleep(0.1)
+            time_left -= 0.1
         # page is loaded - dump the dom
         if self.browser.capture_dom:
             self.webscreenshot.dom = await self.get_dom()
