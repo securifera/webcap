@@ -201,7 +201,7 @@ def scan(
     ignore_types: Annotated[
         list[str],
         typer.Option(
-            help="Capture the full body of each HTTP response (including API calls etc.)",
+            help="Ignore these filetypes",
             rich_help_panel="JSON (Only apply when -j/--json is used)",
         ),
     ] = defaults.ignored_types,

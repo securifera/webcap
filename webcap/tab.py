@@ -101,7 +101,7 @@ class Tab(WebCapBase):
     async def add_request(self, request):
         request_type = request.get("type", "Unknown").lower()
         if request_type in self.browser.ignore_types:
-            self.log.debug(f"Ignoring request type: {request_type}")
+            # self.log.debug(f"Ignoring request type: {request_type}")
             return
 
         request_id = request.get("requestId", "")
@@ -128,7 +128,7 @@ class Tab(WebCapBase):
                 raise DevToolsProtocolError(f"No response type found in response: {response}")
 
         if response_type in self.browser.ignore_types:
-            self.log.debug(f"Ignoring response type: {response_type}")
+            # self.log.debug(f"Ignoring response type: {response_type}")
             return
 
         with suppress(KeyError):

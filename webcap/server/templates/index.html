@@ -168,7 +168,7 @@
             const [searchQuery, setSearchQuery] = useState('');
             const [currentPage, setCurrentPage] = useState(1);
             const [screenshotsPerPage, setScreenshotsPerPage] = useState(12);
-            const [sortConfig, setSortConfig] = useState(null);
+            const [sortConfig, setSortConfig] = useState({ key: 'hash', direction: 'descending' });
             const [showHashModal, setShowHashModal] = useState(false);
             const [selectedHashes, setSelectedHashes] = useState(new Set());
             const [selectedScreenshot, setSelectedScreenshot] = useState(null);
@@ -190,19 +190,18 @@
                     value.url.toLowerCase().includes(searchQuery.toLowerCase()))
                 );
 
-            const sortedScreenshots = sortConfig ? [...filteredScreenshots].sort((a, b) => {
-                const [idA, valueA] = a;
-                const [idB, valueB] = b;
-                const key = sortConfig.key;
+            const sortedScreenshots = [...filteredScreenshots].sort((a, b) => {
+                const [, screenshotA] = a;
+                const [, screenshotB] = b;
 
-                if (valueA[key] < valueB[key]) {
+                if (screenshotA.hash < screenshotB.hash) {
                     return sortConfig.direction === 'ascending' ? -1 : 1;
                 }
-                if (valueA[key] > valueB[key]) {
+                if (screenshotA.hash > screenshotB.hash) {
                     return sortConfig.direction === 'ascending' ? 1 : -1;
                 }
                 return 0;
-            }) : filteredScreenshots;
+            });
 
             const indexOfLastScreenshot = currentPage * screenshotsPerPage;
             const indexOfFirstScreenshot = indexOfLastScreenshot - screenshotsPerPage;
