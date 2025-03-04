@@ -20,14 +20,14 @@ from webcap.helpers import str_or_file_list, validate_urls, is_cancellation, col
 
 
 # typer theme
-typer.rich_utils.STYLE_OPTION = "bold slate_blue1"
+typer.rich_utils.STYLE_OPTION = "bold color(129)"
 typer.rich_utils.STYLE_NEGATIVE_OPTION = "bold red"
 typer.rich_utils.STYLE_NEGATIVE_SWITCH = "bold red"
-typer.rich_utils.STYLE_SWITCH = "bold purple"
+typer.rich_utils.STYLE_SWITCH = "bold color(201)"
 typer.rich_utils.STYLE_USAGE = "bright_white"
-typer.rich_utils.STYLE_METAVAR = "bold pink1"
-typer.rich_utils.STYLE_OPTION_ENVVAR = "dim magenta"
-typer.rich_utils.STYLE_COMMANDS_TABLE_FIRST_COLUMN = "bold purple"
+typer.rich_utils.STYLE_METAVAR = "color(198)"
+typer.rich_utils.STYLE_OPTION_ENVVAR = "color(165)"
+typer.rich_utils.STYLE_COMMANDS_TABLE_FIRST_COLUMN = "bold color(198)"
 
 
 ascii_art = r""" [1;38;5;196m         ___..._[0m
