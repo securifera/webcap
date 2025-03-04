@@ -45,6 +45,7 @@ class Browser(WebCapBase):
         resolution=defaults.resolution,
         user_agent=defaults.user_agent,
         proxy=None,
+        timeout=defaults.timeout,
         delay=defaults.delay,
         full_page=False,
         dom=False,
@@ -66,6 +67,7 @@ class Browser(WebCapBase):
         self.cache_dir = Path.home() / ".webcap"
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.proxy = proxy
+        self.timeout = timeout
         self.delay = delay
         self.user_agent = user_agent
         self.full_page_capture = full_page
@@ -127,7 +129,13 @@ class Browser(WebCapBase):
     async def new_tab(self, url):
         tab = Tab(self)
         await tab.create()
-        await tab.navigate(url)
+        try:
+            await asyncio.wait_for(tab.navigate(url), timeout=self.timeout)
+        except asyncio.TimeoutError:
+            self.log.info(f"URL {url} load timed out after {self.timeout} seconds")
+            # Optionally, you might want to close the tab or take other actions
+            await tab.close()
+            raise
         return tab
 
     async def start(self):

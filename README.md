@@ -137,7 +137,8 @@ if __name__ == "__main__":
 ╰────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Performance ──────────────────────────────────────────────────────────────────────────────╮
 │ --threads  -t      INTEGER  Number of threads to use [default: 15]                         │
-│ --delay            SECONDS  Delay before capturing (default: 3.0 seconds) [default: 3.0]   │
+│ --timeout  -T      INTEGER  Timeout before giving up on a web request [default: 10]        │
+│ --delay            SECONDS  Delay before capturing [default: 3.0]                          │
 ╰────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ HTTP ─────────────────────────────────────────────────────────────────────────────────────╮
 │ --user-agent  -U      TEXT  User agent to use                                              │
