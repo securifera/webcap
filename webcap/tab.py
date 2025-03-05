@@ -225,10 +225,15 @@ class Tab(WebCapBase):
                 waiter.set_exception(asyncio.CancelledError())
 
     async def get_dom(self):
-        nodes = await self.request("DOM.getDocument")
-        root_node = nodes["root"]
-        outer_html = await self.request("DOM.getOuterHTML", nodeId=root_node["nodeId"])
-        return outer_html["outerHTML"]
+        try:
+            nodes = await self.request("DOM.getDocument")
+            root_node = nodes["root"]
+            outer_html = await self.request("DOM.getOuterHTML", nodeId=root_node["nodeId"])
+            return outer_html["outerHTML"]
+        except Exception as e:
+            url = getattr(self.webscreenshot, "url", "")
+            self.log.error(f"Error getting DOM for {url}: {e}")
+            return ""
 
     async def get_title(self):
         response = await self.request("Page.getNavigationHistory")
