@@ -133,9 +133,8 @@ class Browser(WebCapBase):
             await asyncio.wait_for(tab.navigate(url), timeout=self.timeout)
         except asyncio.TimeoutError:
             self.log.info(f"URL {url} load timed out after {self.timeout} seconds")
-            # Optionally, you might want to close the tab or take other actions
+        finally:
             await tab.close()
-            raise
         return tab
 
     async def start(self):
