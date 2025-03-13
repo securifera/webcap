@@ -121,11 +121,13 @@ class Browser(WebCapBase):
     async def screenshot(self, url):
         try:
             tab = await self.new_tab(url)
-            return await tab.screenshot()
+            await tab.screenshot()
+            return tab.webscreenshot
         except asyncio.TimeoutError:
             self.log.info(f"URL {url} load timed out after {self.timeout} seconds")
+            raise
         except Exception as e:
-            self.log.error(f"Error taking screenshot for {url}: {e}")
+            self.log.error(f"Error visiting {url}: {e}")
             raise
         finally:
             with suppress(Exception):
@@ -134,7 +136,8 @@ class Browser(WebCapBase):
     async def new_tab(self, url):
         tab = Tab(self)
         await tab.create()
-        return await asyncio.wait_for(tab.navigate(url), timeout=self.timeout)
+        await asyncio.wait_for(tab.navigate(url), timeout=self.timeout)
+        return tab
 
     async def start(self):
         await self.detect_chrome_path()
