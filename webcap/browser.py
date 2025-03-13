@@ -198,14 +198,16 @@ class Browser(WebCapBase):
                 if sessionId:
                     request["sessionId"] = sessionId
                 await self._send_request(request)
-                return await future
+                response = await future
+                return response
             except DevToolsProtocolError as e:
                 self.pending_requests.pop(message_id, None)
                 error = DevToolsProtocolError(f"Error sending command: {command}({repr_params(params)}): {e}")
                 self.log.info(error)
                 await asyncio.sleep(retry_delay)
                 retry_delay *= 2
-        raise error
+        self.log.debug(f"Error sending command: {command}({repr_params(params)}): {error}")
+        return {"success": False, "error": str(error)}
 
     async def _build_request(self, command, message_id, **params):
         # make sure command is supported

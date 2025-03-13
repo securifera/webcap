@@ -232,7 +232,7 @@ class Tab(WebCapBase):
             return outer_html["outerHTML"]
         except Exception as e:
             url = getattr(self.webscreenshot, "url", "")
-            self.log.error(f"Error getting DOM for {url}: {e}")
+            self.log.error(f"Error getting DOM for {url}: {e} (available nodes: {list(nodes)})")
             return ""
 
     async def get_title(self):
