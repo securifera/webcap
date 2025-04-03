@@ -1,8 +1,8 @@
 import os
 from pathlib import Path
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
+from fastapi.responses import FileResponse
 
 from webcap.errors import ScreenshotDirError
 
@@ -22,13 +22,7 @@ app.mount("/screenshots", StaticFiles(directory=output_dir), name="screenshots")
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
 
-templates_dir = Path(__file__).parent / "templates"
-print(f"Resolved templates directory: {templates_dir}")
-
-# serve root page
-templates = Jinja2Templates(directory=templates_dir)
-
-
 @app.get("/")
-async def read_root(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+async def read_root():
+    # Directly serve the HTML file using FileResponse
+    return FileResponse(Path(__file__).parent / "templates" / "index.html")
