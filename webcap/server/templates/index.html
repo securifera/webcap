@@ -157,11 +157,15 @@
 <body class="bg-black text-white">
     <div id="root" class="container mx-auto p-4"></div>
 
-    <script src="/static/react.production.min.js"></script>
-    <script src="/static/react-dom.production.min.js"></script>
+    <!-- React with JSX support -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <script>
+    <script type="text/babel">
+        const React = window.React;
         const { useState, useEffect } = React;
+        const ReactDOM = window.ReactDOM;
 
         function App() {
             const [screenshots, setScreenshots] = useState([]);
@@ -234,117 +238,131 @@
                 setSelectedScreenshot(id);
             };
 
-            return React.createElement('div', null,
-                React.createElement('a', { href: 'https://github.com/blacklanternsecurity/webcap', target: '_blank' },
-                    React.createElement('img', { 
-                        src: '/static/webcap.png', 
-                        alt: 'Webcap Logo', 
-                        style: { height: '12em' },
-                        className: 'mb-4' 
-                    })
-                ),
-                React.createElement('div', { className: 'bg-gray-900 p-6 rounded-lg' },
-                    React.createElement('div', { className: 'flex flex-col md:flex-row md:items-center space-y-4 md:space-y-0 md:space-x-4' },
-                        React.createElement('div', { className: 'w-full md:w-1/2' },
-                            React.createElement(SearchBar, { onSearch: setSearchQuery })
-                        ),
-                        React.createElement('div', { className: 'w-full md:w-1/2' },
-                            React.createElement(PerceptionWidget, {
-                                screenshots,
-                                selectedHashes,
-                                setSelectedHashes,
-                                onShowModal: () => setShowHashModal(true)
-                            })
-                        )
-                    ),
-                    React.createElement(ScreenshotList, { 
-                        screenshots: currentScreenshots, 
-                        onSort: handleSort,
-                        onScreenshotClick: showScreenshotDetail  // Pass the function as a prop
-                    }),
-                    React.createElement('div', { className: 'mt-4 flex justify-center' },
-                        React.createElement(Pagination, { 
-                            currentPage, 
-                            totalPages, 
-                            onPageChange: handlePageChange,
-                            onPageSizeChange: handlePageSizeChange
-                        })
-                    )
-                ),
-                showHashModal && React.createElement(HashModal, {
-                    screenshots,
-                    onClose: () => setShowHashModal(false),
-                    selectedHashes,
-                    setSelectedHashes
-                }),
-                selectedScreenshot && React.createElement(ScreenshotDetailModal, {
-                    screenshotId: selectedScreenshot,
-                    onClose: () => setSelectedScreenshot(null)
-                })
+            return (
+                <div>
+                    <a href="https://github.com/blacklanternsecurity/webcap" target="_blank">
+                        <img 
+                            src="/static/webcap.png" 
+                            alt="Webcap Logo" 
+                            style={{ height: "12em" }} 
+                            className="mb-4" 
+                        />
+                    </a>
+                    <div className="bg-gray-900 p-6 rounded-lg">
+                        <div className="flex flex-col md:flex-row md:items-center space-y-4 md:space-y-0 md:space-x-4">
+                            <div className="w-full md:w-1/2">
+                                <SearchBar onSearch={setSearchQuery} />
+                            </div>
+                            <div className="w-full md:w-1/2">
+                                <PerceptionWidget
+                                    screenshots={screenshots}
+                                    selectedHashes={selectedHashes}
+                                    setSelectedHashes={setSelectedHashes}
+                                    onShowModal={() => setShowHashModal(true)}
+                                />
+                            </div>
+                        </div>
+                        <ScreenshotList 
+                            screenshots={currentScreenshots} 
+                            onSort={handleSort}
+                            onScreenshotClick={showScreenshotDetail}
+                        />
+                        <div className="mt-4 flex justify-center">
+                            <Pagination 
+                                currentPage={currentPage} 
+                                totalPages={totalPages} 
+                                onPageChange={handlePageChange}
+                                onPageSizeChange={handlePageSizeChange}
+                            />
+                        </div>
+                    </div>
+                    {showHashModal && (
+                        <HashModal
+                            screenshots={screenshots}
+                            onClose={() => setShowHashModal(false)}
+                            selectedHashes={selectedHashes}
+                            setSelectedHashes={setSelectedHashes}
+                        />
+                    )}
+                    {selectedScreenshot && (
+                        <ScreenshotDetailModal
+                            screenshotId={selectedScreenshot}
+                            onClose={() => setSelectedScreenshot(null)}
+                        />
+                    )}
+                </div>
             );
         }
 
         function SearchBar({ onSearch }) {
-            return React.createElement('input', {
-                type: 'text',
-                placeholder: 'Search screenshots...',
-                className: 'w-full p-2 border border-gray-700 rounded bg-gray-900 text-white h-16',
-                style: { height: '5rem' },
-                onChange: (e) => onSearch(e.target.value)
-            });
+            return (
+                <input
+                    type="text"
+                    placeholder="Search screenshots..."
+                    className="w-full p-2 border border-gray-700 rounded bg-gray-900 text-white h-16"
+                    style={{ height: "5rem" }}
+                    onChange={(e) => onSearch(e.target.value)}
+                />
+            );
         }
 
         function ScreenshotList({ screenshots, onSort, onScreenshotClick }) {
-            return React.createElement('div', { className: 'p-4' },
-                React.createElement('div', { 
-                    className: 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 grid-flow-dense auto-rows-auto'
-                },
-                    screenshots.map(([id, screenshot]) => 
-                        React.createElement('div', { 
-                            key: id, 
-                            className: 'bg-gray-900 shadow-md overflow-hidden hover:shadow-lg transition-shadow cursor-pointer',
-                            onClick: () => onScreenshotClick(id)
-                        },
-                            React.createElement('img', {
-                                src: `/screenshots/${id}`,
-                                alt: screenshot.url,
-                                className: 'w-full h-auto'
-                            }),
-                            React.createElement('div', { className: 'p-4' },
-                                React.createElement('div', { className: 'flex items-center gap-2 mb-2' },
-                                    React.createElement('span', { 
-                                        className: `px-2 py-1 rounded text-sm ${
+            return (
+                <div className="p-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 grid-flow-dense auto-rows-auto">
+                        {screenshots.map(([id, screenshot]) => (
+                            <div 
+                                key={id} 
+                                className="bg-gray-900 shadow-md overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
+                                onClick={() => onScreenshotClick(id)}
+                            >
+                                <img
+                                    src={`/screenshots/${id}`}
+                                    alt={screenshot.url}
+                                    className="w-full h-auto"
+                                />
+                                <div className="p-4">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <span className={`px-2 py-1 rounded text-sm ${
                                             screenshot.status >= 200 && screenshot.status < 300 ? 'bg-green-900 text-green-300' :
                                             screenshot.status >= 300 && screenshot.status < 400 ? 'bg-blue-900 text-blue-300' :
                                             screenshot.status >= 400 ? 'bg-red-900 text-red-300' :
                                             'bg-gray-700 text-gray-300'
-                                        }`
-                                    }, screenshot.status),
-                                    React.createElement('div', { 
-                                        className: 'text-white font-medium truncate flex-1'
-                                    }, screenshot.title)
-                                ),
-                                React.createElement('a', { 
-                                    href: screenshot.url, 
-                                    target: '_blank', 
-                                    rel: 'noopener noreferrer',
-                                    className: 'text-blue-500 hover:text-blue-400 text-sm truncate block'
-                                }, screenshot.url)
-                            )
-                        )
-                    )
-                )
+                                        }`}>
+                                            {screenshot.status}
+                                        </span>
+                                        <div className="text-white font-medium truncate flex-1">
+                                            {screenshot.title}
+                                        </div>
+                                    </div>
+                                    <a 
+                                        href={screenshot.url} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer"
+                                        className="text-blue-500 hover:text-blue-400 text-sm truncate block"
+                                    >
+                                        {screenshot.url}
+                                    </a>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
             );
         }
 
         function PageSizeSelector({ onPageSizeChange }) {
-            return React.createElement('select', { 
-                onChange: onPageSizeChange, 
-                className: 'ml-2 border border-gray-700 rounded bg-gray-900 text-white select-button'
-            },
-                [12, 16, 20, 24, 32, 48, 64, -1].map(size => 
-                    React.createElement('option', { key: size, value: size }, size === -1 ? 'Show All' : `${size} per page`)
-                )
+            return (
+                <select 
+                    onChange={onPageSizeChange} 
+                    className="ml-2 border border-gray-700 rounded bg-gray-900 text-white select-button"
+                >
+                    {[12, 16, 20, 24, 32, 48, 64, -1].map(size => (
+                        <option key={size} value={size}>
+                            {size === -1 ? 'Show All' : `${size} per page`}
+                        </option>
+                    ))}
+                </select>
             );
         }
 
@@ -363,26 +381,34 @@
                 pageNumbers.push(i);
             }
 
-            return React.createElement('div', { className: 'flex items-center space-x-2' },
-                React.createElement('button', { 
-                    onClick: () => onPageChange(1), 
-                    disabled: currentPage === 1,
-                    className: `button ${currentPage === 1 ? 'active' : ''}`
-                }, 'First'),
-                pageNumbers.map(number => 
-                    React.createElement('button', { 
-                        key: number, 
-                        onClick: () => onPageChange(number),
-                        disabled: number === currentPage,
-                        className: `button ${number === currentPage ? 'active' : ''}`
-                    }, number)
-                ),
-                React.createElement('button', { 
-                    onClick: () => onPageChange(totalPages), 
-                    disabled: currentPage === totalPages,
-                    className: `button ${currentPage === totalPages ? 'active' : ''}`
-                }, 'Last'),
-                React.createElement(PageSizeSelector, { onPageSizeChange: onPageSizeChange })
+            return (
+                <div className="flex items-center space-x-2">
+                    <button 
+                        onClick={() => onPageChange(1)} 
+                        disabled={currentPage === 1}
+                        className={`button ${currentPage === 1 ? 'active' : ''}`}
+                    >
+                        First
+                    </button>
+                    {pageNumbers.map(number => (
+                        <button 
+                            key={number} 
+                            onClick={() => onPageChange(number)}
+                            disabled={number === currentPage}
+                            className={`button ${number === currentPage ? 'active' : ''}`}
+                        >
+                            {number}
+                        </button>
+                    ))}
+                    <button 
+                        onClick={() => onPageChange(totalPages)} 
+                        disabled={currentPage === totalPages}
+                        className={`button ${currentPage === totalPages ? 'active' : ''}`}
+                    >
+                        Last
+                    </button>
+                    <PageSizeSelector onPageSizeChange={onPageSizeChange} />
+                </div>
             );
         }
 
@@ -411,53 +437,55 @@
                 setSelectedHashes(newSelected);
             };
 
-            return React.createElement('div', { 
-                className: 'modal',
-                onClick: (e) => {
-                    if (e.target === e.currentTarget) {
-                        onClose();
-                    }
-                }
-            },
-                React.createElement('div', { 
-                    className: 'modal-content'
-                },
-                    React.createElement('div', { className: 'flex justify-between mb-4' },
-                        React.createElement('h2', { className: 'text-xl' }, 'Perception Hash Groups'),
-                        React.createElement('button', {
-                            className: 'button',
-                            onClick: onClose
-                        }, '×')
-                    ),
-                    sortedHashGroups.map(([hash, group]) =>
-                        React.createElement('div', { 
-                            key: hash,
-                            className: 'hash-group',
-                            onClick: () => toggleHash(hash)
-                        },
-                            React.createElement('div', { className: 'flex items-center space-x-4' },
-                                React.createElement('input', {
-                                    type: 'checkbox',
-                                    checked: selectedHashes.has(hash),
-                                    onChange: (e) => {
-                                        e.stopPropagation();
-                                        toggleHash(hash);
-                                    },
-                                    className: 'hash-checkbox'
-                                }),
-                                React.createElement('img', {
-                                    className: 'screenshot-thumbnail',
-                                    src: `/screenshots/${group[0].id}`,
-                                    alt: 'Representative thumbnail'
-                                }),
-                                React.createElement('div', null,
-                                    React.createElement('div', null, group[0].title || 'Untitled'),
-                                    React.createElement('div', null, `${group.length} similar`)
-                                )
-                            )
-                        )
-                    )
-                )
+            return (
+                <div 
+                    className="modal"
+                    onClick={(e) => {
+                        if (e.target === e.currentTarget) {
+                            onClose();
+                        }
+                    }}
+                >
+                    <div className="modal-content">
+                        <div className="flex justify-between mb-4">
+                            <h2 className="text-xl">Perception Hash Groups</h2>
+                            <button
+                                className="button"
+                                onClick={onClose}
+                            >
+                                ×
+                            </button>
+                        </div>
+                        {sortedHashGroups.map(([hash, group]) => (
+                            <div 
+                                key={hash}
+                                className="hash-group"
+                                onClick={() => toggleHash(hash)}
+                            >
+                                <div className="flex items-center space-x-4">
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedHashes.has(hash)}
+                                        onChange={(e) => {
+                                            e.stopPropagation();
+                                            toggleHash(hash);
+                                        }}
+                                        className="hash-checkbox"
+                                    />
+                                    <img
+                                        className="screenshot-thumbnail"
+                                        src={`/screenshots/${group[0].id}`}
+                                        alt="Representative thumbnail"
+                                    />
+                                    <div>
+                                        <div>{group[0].title || 'Untitled'}</div>
+                                        <div>{`${group.length} similar`}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
             );
         }
 
@@ -501,51 +529,66 @@
             const currentHash = currentHashIndex !== -1 ? sortedHashes[currentHashIndex] : null;
             const currentGroup = currentHash ? hashGroups[currentHash] : null;
 
-            return React.createElement('div', { className: 'perception-widget' },
-                React.createElement('button', {
-                    className: 'perception-nav-button',
-                    onClick: () => navigateHash('prev'),
-                    disabled: sortedHashes.length === 0
-                }, '<'),
+            return (
+                <div className="perception-widget">
+                    <button
+                        className="perception-nav-button"
+                        onClick={() => navigateHash('prev')}
+                        disabled={sortedHashes.length === 0}
+                    >
+                        &lt;
+                    </button>
 
-                React.createElement('div', { className: 'perception-preview' },
-                    currentGroup 
-                        ? React.createElement('div', { className: 'flex items-center space-x-4' },
-                            React.createElement('img', {
-                                src: `/screenshots/${currentGroup[0].id}`,
-                                alt: 'Preview'
-                            }),
-                            React.createElement('div', { className: 'text-content' },
-                                React.createElement('div', { className: 'title' }, 
-                                    currentGroup[0].title || 'Untitled'
-                                ),
-                                React.createElement('div', null, 
-                                    `${currentGroup.length} similar`
-                                )
+                    <div className="perception-preview">
+                        {currentGroup 
+                            ? (
+                                <div className="flex items-center space-x-4">
+                                    <img
+                                        src={`/screenshots/${currentGroup[0].id}`}
+                                        alt="Preview"
+                                    />
+                                    <div className="text-content">
+                                        <div className="title">
+                                            {currentGroup[0].title || 'Untitled'}
+                                        </div>
+                                        <div>
+                                            {`${currentGroup.length} similar`}
+                                        </div>
+                                    </div>
+                                </div>
                             )
-                        )
-                        : React.createElement('div', { className: 'text-gray-500' }, 
-                            'No perception filter active'
-                        )
-                ),
+                            : (
+                                <div className="text-gray-500">
+                                    No perception filter active
+                                </div>
+                            )
+                        }
+                    </div>
 
-                React.createElement('div', { className: 'button-stack' },
-                    React.createElement('button', {
-                        className: 'button',
-                        onClick: clearSelection,
-                        disabled: selectedHashes.size === 0
-                    }, 'Clear'),
-                    React.createElement('button', {
-                        className: 'button',
-                        onClick: onShowModal
-                    }, 'Select Custom')
-                ),
-                
-                React.createElement('button', {
-                    className: 'perception-nav-button',
-                    onClick: () => navigateHash('next'),
-                    disabled: sortedHashes.length === 0
-                }, '>')
+                    <div className="button-stack">
+                        <button
+                            className="button"
+                            onClick={clearSelection}
+                            disabled={selectedHashes.size === 0}
+                        >
+                            Clear
+                        </button>
+                        <button
+                            className="button"
+                            onClick={onShowModal}
+                        >
+                            Select Custom
+                        </button>
+                    </div>
+                    
+                    <button
+                        className="perception-nav-button"
+                        onClick={() => navigateHash('next')}
+                        disabled={sortedHashes.length === 0}
+                    >
+                        &gt;
+                    </button>
+                </div>
             );
         }
 
@@ -565,99 +608,113 @@
                 .pop();
             const httpTitle = finalNavigation?.title || details.title || 'Untitled';
 
-            return React.createElement('div', {
-                className: 'modal',
-                onClick: (e) => {
-                    if (e.target === e.currentTarget) onClose();
-                }
-            },
-                React.createElement('div', {
-                    className: 'modal-content max-w-6xl w-full bg-gray-900 border border-gray-700'
-                },
-                    React.createElement('div', { className: 'flex justify-between items-center mb-6 border-b border-gray-700 pb-4' },
-                        React.createElement('h1', { 
-                            className: 'text-2xl font-bold text-white truncate max-w-[90%]' 
-                        }, httpTitle),
-                        React.createElement('button', {
-                            className: 'button',
-                            onClick: onClose
-                        }, '×')
-                    ),
-                    React.createElement('img', {
-                        src: `/screenshots/${screenshotId}`,
-                        alt: details.title || details.url,
-                        className: 'w-full h-auto mb-6 border border-gray-700'
-                    }),
-                    React.createElement('div', { className: 'space-y-6' },
-                      React.createElement('div', { className: 'pt-4 border-t border-gray-700' },
-                              React.createElement('div', { className: 'grid grid-cols-2 gap-4' },
-                                  React.createElement('div', null,
-                                      React.createElement('span', { className: 'text-gray-400' }, 'Initial URL: '),
-                                      React.createElement('a', {
-                                          href: details.url,
-                                          target: '_blank',
-                                          rel: 'noopener noreferrer',
-                                          className: 'text-blue-400 hover:text-blue-300'
-                                      }, details.url)
-                                  ),
-                                  React.createElement('div', null,
-                                      React.createElement('span', { className: 'text-gray-400' }, 'Final URL: '),
-                                      React.createElement('a', {
-                                          href: details.final_url,
-                                          target: '_blank',
-                                          rel: 'noopener noreferrer',
-                                          className: 'text-blue-400 hover:text-blue-300'
-                                      }, details.final_url)
-                                  )
-                              )
-                          ),
-                        React.createElement('div', { className: 'space-y-2' },
-                            React.createElement('h3', { className: 'text-lg font-semibold text-gray-300' }, 'Navigation Flow'),
-                            React.createElement('div', { className: 'space-y-4' },
-                                details.navigation_history.map((nav, index) =>
-                                    React.createElement('div', { 
-                                        key: index,
-                                        className: 'bg-gray-800 p-4 rounded-lg border border-gray-700'
-                                    },
-                                        React.createElement('div', { className: 'flex items-center gap-3 mb-2' },
-                                            React.createElement('span', { 
-                                                className: `px-2 py-1 rounded text-sm ${
+            return (
+                <div
+                    className="modal"
+                    onClick={(e) => {
+                        if (e.target === e.currentTarget) onClose();
+                    }}
+                >
+                    <div className="modal-content max-w-6xl w-full bg-gray-900 border border-gray-700">
+                        <div className="flex justify-between items-center mb-6 border-b border-gray-700 pb-4">
+                            <h1 className="text-2xl font-bold text-white truncate max-w-[90%]">
+                                {httpTitle}
+                            </h1>
+                            <button
+                                className="button"
+                                onClick={onClose}
+                            >
+                                ×
+                            </button>
+                        </div>
+                        <img
+                            src={`/screenshots/${screenshotId}`}
+                            alt={details.title || details.url}
+                            className="w-full h-auto mb-6 border border-gray-700"
+                        />
+                        <div className="space-y-6">
+                            <div className="pt-4 border-t border-gray-700">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <span className="text-gray-400">Initial URL: </span>
+                                        <a
+                                            href={details.url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-blue-400 hover:text-blue-300"
+                                        >
+                                            {details.url}
+                                        </a>
+                                    </div>
+                                    <div>
+                                        <span className="text-gray-400">Final URL: </span>
+                                        <a
+                                            href={details.final_url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-blue-400 hover:text-blue-300"
+                                        >
+                                            {details.final_url}
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="space-y-2">
+                                <h3 className="text-lg font-semibold text-gray-300">Navigation Flow</h3>
+                                <div className="space-y-4">
+                                    {details.navigation_history.map((nav, index) => (
+                                        <div 
+                                            key={index}
+                                            className="bg-gray-800 p-4 rounded-lg border border-gray-700"
+                                        >
+                                            <div className="flex items-center gap-3 mb-2">
+                                                <span className={`px-2 py-1 rounded text-sm ${
                                                     nav.status >= 200 && nav.status < 300 ? 'bg-green-900 text-green-300' :
                                                     nav.status >= 300 && nav.status < 400 ? 'bg-blue-900 text-blue-300' :
                                                     nav.status >= 400 ? 'bg-red-900 text-red-300' :
                                                     'bg-gray-700 text-gray-300'
-                                                }`
-                                            }, nav.status),
-                                            nav.mimeType && React.createElement('span', { 
-                                                className: 'text-sm text-gray-400'
-                                            }, nav.mimeType)
-                                        ),
-                                        React.createElement('a', {
-                                            href: nav.url,
-                                            target: '_blank',
-                                            rel: 'noopener noreferrer',
-                                            className: 'text-blue-400 hover:text-blue-300 break-all'
-                                        }, nav.url),
-                                        nav.location && React.createElement('div', { className: 'mt-2' },
-                                            React.createElement('span', { className: 'text-gray-400' }, '→ Redirects to: '),
-                                            React.createElement('a', {
-                                                href: nav.location,
-                                                target: '_blank',
-                                                rel: 'noopener noreferrer',
-                                                className: 'text-blue-400 hover:text-blue-300 break-all'
-                                            }, nav.location)
-                                        )
-                                    )
-                                )
-                            )
-                        ),
-
-                    )
-                )
+                                                }`}>
+                                                    {nav.status}
+                                                </span>
+                                                {nav.mimeType && (
+                                                    <span className="text-sm text-gray-400">
+                                                        {nav.mimeType}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <a
+                                                href={nav.url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="text-blue-400 hover:text-blue-300 break-all"
+                                            >
+                                                {nav.url}
+                                            </a>
+                                            {nav.location && (
+                                                <div className="mt-2">
+                                                    <span className="text-gray-400">→ Redirects to: </span>
+                                                    <a
+                                                        href={nav.location}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="text-blue-400 hover:text-blue-300 break-all"
+                                                    >
+                                                        {nav.location}
+                                                    </a>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             );
         }
 
-        ReactDOM.render(React.createElement(App), document.getElementById('root'));
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
     </script>
 </body>
 </html>
