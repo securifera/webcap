@@ -1,13 +1,7 @@
-import io
 import re
-import sys
-import time
-import httpx
-import shutil
 import asyncio
-import inspect
 import logging
-import zipfile
+import traceback
 from pathlib import Path
 from contextlib import suppress
 from urllib.parse import urlparse
@@ -32,16 +26,19 @@ async def task_pool(fn, all_args, threads=10, global_kwargs=None):
                 task = asyncio.create_task(fn(arg, **global_kwargs))
                 tasks[task] = arg
 
-        for _ in range(threads):  # Start initial batch of tasks
+        for _ in range(threads):
             new_task()
 
-        while tasks:  # While there are tasks pending
-            # Wait for the first task to complete
+        while tasks:
             done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
             for task in done:
                 arg = tasks.pop(task)
-                result = task.result()
-                yield arg, result
+                try:
+                    result = task.result()
+                    yield arg, result
+                except Exception as e:
+                    log.error(f"Error in task {arg}: {e}")
+                    log.debug(traceback.format_exc())
                 new_task()
     except (KeyboardInterrupt, asyncio.CancelledError):
         for task in tasks:
@@ -224,6 +221,16 @@ def truncate_filename(file_path, max_length=255):
 
 
 def color_status_code(status_code):
+    """
+    This function takes an HTTP status code as input and returns it in bold with a specific color based on the first digit of the status code.
+
+    Args:
+        status_code (int or str): An HTTP status code represented as either an integer or string.
+
+    Returns:
+        str: A colored string representation of the status code, indicating its severity level.
+
+    """
     status_code = str(status_code)
     if status_code == "404":
         color = "orchid"
