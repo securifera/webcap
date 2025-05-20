@@ -1,13 +1,7 @@
-import io
 import re
-import sys
-import time
-import httpx
-import shutil
 import asyncio
-import inspect
 import logging
-import zipfile
+import traceback
 from pathlib import Path
 from contextlib import suppress
 from urllib.parse import urlparse
@@ -32,18 +26,19 @@ async def task_pool(fn, all_args, threads=10, global_kwargs=None):
                 task = asyncio.create_task(fn(arg, **global_kwargs))
                 tasks[task] = arg
 
-        for _ in range(threads):  # Start initial batch of tasks
         for _ in range(threads):
             new_task()
 
-        while tasks:  # While there are tasks pending
-            # Wait for the first task to complete
         while tasks:
             done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
             for task in done:
                 arg = tasks.pop(task)
-                result = task.result()
-                yield arg, result
+                try:
+                    result = task.result()
+                    yield arg, result
+                except Exception as e:
+                    log.error(f"Error in task {arg}: {e}")
+                    log.debug(traceback.format_exc())
                 new_task()
     except (KeyboardInterrupt, asyncio.CancelledError):
         for task in tasks:
@@ -76,7 +71,6 @@ def validate_urls(urls):
     for url in urls:
         parsed_url = urlparse(url)
         if (not parsed_url.netloc) or (parsed_url.scheme not in ["http", "https"]):
-        if not parsed_url.netloc or parsed_url.scheme not in ["http", "https"]:
             log.warning(f"skipping invalid URL: {url}")
             continue
         yield url
