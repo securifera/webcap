@@ -125,10 +125,8 @@ class Browser(WebCapBase):
             return tab.webscreenshot
         except asyncio.TimeoutError:
             self.log.info(f"URL {url} load timed out after {self.timeout} seconds")
-            raise
         except Exception as e:
             self.log.error(f"Error visiting {url}: {e}")
-            raise
         finally:
             with suppress(Exception):
                 await tab.close()

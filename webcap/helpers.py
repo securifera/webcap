@@ -33,10 +33,12 @@ async def task_pool(fn, all_args, threads=10, global_kwargs=None):
                 tasks[task] = arg
 
         for _ in range(threads):  # Start initial batch of tasks
+        for _ in range(threads):
             new_task()
 
         while tasks:  # While there are tasks pending
             # Wait for the first task to complete
+        while tasks:
             done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
             for task in done:
                 arg = tasks.pop(task)
@@ -74,6 +76,7 @@ def validate_urls(urls):
     for url in urls:
         parsed_url = urlparse(url)
         if (not parsed_url.netloc) or (parsed_url.scheme not in ["http", "https"]):
+        if not parsed_url.netloc or parsed_url.scheme not in ["http", "https"]:
             log.warning(f"skipping invalid URL: {url}")
             continue
         yield url
@@ -224,6 +227,16 @@ def truncate_filename(file_path, max_length=255):
 
 
 def color_status_code(status_code):
+    """
+    This function takes an HTTP status code as input and returns it in bold with a specific color based on the first digit of the status code.
+
+    Args:
+        status_code (int or str): An HTTP status code represented as either an integer or string.
+
+    Returns:
+        str: A colored string representation of the status code, indicating its severity level.
+
+    """
     status_code = str(status_code)
     if status_code == "404":
         color = "orchid"
