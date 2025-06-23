@@ -35,8 +35,6 @@ class Browser(WebCapBase):
         "--headless=new",
         "--enable-automation",
         "--ignore-certificate-errors",
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
         # "--site-per-process",
     ]
 
