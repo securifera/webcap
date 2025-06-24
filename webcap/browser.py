@@ -20,7 +20,8 @@ from webcap.helpers import task_pool, repr_params  # , download_wap
 
 
 class Browser(WebCapBase):
-    possible_chrome_binaries = ["chromium", "chromium-browser", "chrome", "chrome-browser", "google-chrome"]
+    possible_chrome_binaries = [
+        "chromium", "chromium-browser", "chrome", "chrome-browser", "google-chrome"]
 
     base_chrome_flags = [
         "--disable-features=MediaRouter",
@@ -124,9 +125,8 @@ class Browser(WebCapBase):
             await tab.screenshot()
             return tab.webscreenshot
         except asyncio.TimeoutError:
-            self.log.info(f"URL {url} load timed out after {self.timeout} seconds")
-        except Exception as e:
-            self.log.error(f"Error visiting {url}: {e}")
+            self.log.info(
+                f"URL {url} load timed out after {self.timeout} seconds")
         finally:
             with suppress(Exception):
                 await tab.close()
@@ -177,7 +177,8 @@ class Browser(WebCapBase):
                     await event_queue.put(event)
                 except KeyError:
                     if method not in ["Inspector.detached", "Page.frameDetached"]:
-                        self.log.debug(f"No handler for event {method} in session {session_id}")
+                        self.log.debug(
+                            f"No handler for event {method} in session {session_id}")
         else:
             self.log.error(f"Unknown message: {event}")
 
@@ -201,11 +202,13 @@ class Browser(WebCapBase):
                 return response
             except DevToolsProtocolError as e:
                 self.pending_requests.pop(message_id, None)
-                error = DevToolsProtocolError(f"Error sending command: {command}({repr_params(params)}): {e}")
+                error = DevToolsProtocolError(
+                    f"Error sending command: {command}({repr_params(params)}): {e}")
                 self.log.info(error)
                 await asyncio.sleep(retry_delay)
                 retry_delay *= 2
-        self.log.debug(f"Error sending command: {command}({repr_params(params)}): {error}")
+        self.log.debug(
+            f"Error sending command: {command}({repr_params(params)}): {error}")
         return {"success": False, "error": str(error)}
 
     async def _build_request(self, command, message_id, **params):
@@ -226,7 +229,8 @@ class Browser(WebCapBase):
 
     async def _send_request(self, request):
         if self.websocket is None:
-            raise WebCapError("You must call start() on the browser before making a request")
+            raise WebCapError(
+                "You must call start() on the browser before making a request")
         # self.log.debug(f"Sending request: {request}")
         await self.websocket.send(orjson.dumps(request).decode("utf-8"))
 
@@ -241,18 +245,21 @@ class Browser(WebCapBase):
                     stdout, stderr = await process.communicate()
 
                     if process.returncode != 0:
-                        self.log.error(f"Failed to get version for {chrome_path}: {stderr.decode().strip()}")
+                        self.log.error(
+                            f"Failed to get version for {chrome_path}: {stderr.decode().strip()}")
                         continue
 
                     version_output = stdout.decode().strip()
                     match = self.chrome_version_regex.search(version_output)
                     if match:
-                        self.log.info(f"Found Chrome version {match.group(1)} at {chrome_path}")
+                        self.log.info(
+                            f"Found Chrome version {match.group(1)} at {chrome_path}")
                         self.version = match.group(1)
                         self.chrome_path = chrome_path
                         break
                     else:
-                        self.log.error(f"Version output did not match expected format: {version_output}")
+                        self.log.error(
+                            f"Version output did not match expected format: {version_output}")
 
         if not self.chrome_path:
             raise Exception("Chrome executable not found")
@@ -268,8 +275,10 @@ class Browser(WebCapBase):
             ] + self.chrome_flags
             # if wap_path is not None:
             #     chrome_command += [f"--load-extension={wap_path}"]
-            self.log.debug("Executing chrome command: " + " ".join(chrome_command))
-            self.chrome_process = Popen(chrome_command, stdout=PIPE, stderr=PIPE)
+            self.log.debug("Executing chrome command: " +
+                           " ".join(chrome_command))
+            self.chrome_process = Popen(
+                chrome_command, stdout=PIPE, stderr=PIPE)
 
         # loop until we get the chrome uri
         while self.websocket_uri is None:
@@ -282,7 +291,8 @@ class Browser(WebCapBase):
             try:
                 async with httpx.AsyncClient() as client:
                     response = await client.get("http://127.0.0.1:9222/json/version")
-                    self.websocket_uri = response.json()["webSocketDebuggerUrl"]
+                    self.websocket_uri = response.json()[
+                        "webSocketDebuggerUrl"]
             except Exception as e:
                 self.log.info(f"Error getting Chrome URI: {e}, retrying...")
                 await asyncio.sleep(0.1)
@@ -300,11 +310,13 @@ class Browser(WebCapBase):
             self._commands = {}
             for domain in self._protocol["domains"]:
                 domain_name = domain["domain"]
-                commands = set(command["name"] for command in domain["commands"])
+                commands = set(command["name"]
+                               for command in domain["commands"])
                 self._commands[domain_name] = commands
 
     async def _start_message_handler(self):
-        self._message_handler_task = asyncio.create_task(self._message_handler())
+        self._message_handler_task = asyncio.create_task(
+            self._message_handler())
 
     async def _message_handler(self):
         """Background task to handle incoming messages"""
@@ -331,9 +343,15 @@ class Browser(WebCapBase):
             if self.websocket:
                 with suppress(Exception):
                     await self.websocket.close()
+                self.websocket = None
             if self.chrome_process:
                 with suppress(Exception):
                     self.chrome_process.terminate()
+            for future in self.pending_requests.values():
+                if not future.done():
+                    future.set_exception(WebCapError(
+                        "Browser stopped before request completed"))
+
         self._closed = True
 
     def cleanup(self):
