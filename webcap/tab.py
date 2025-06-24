@@ -5,7 +5,7 @@ from contextlib import suppress
 
 from webcap.base import WebCapBase
 from webcap.webscreenshot import WebScreenshot
-from webcap.errors import WebCapError, DevToolsProtocolError
+from webcap.errors import WebCapError, DevToolsProtocolError, ChromeInternalError
 
 
 class Tab(WebCapBase):
@@ -56,7 +56,10 @@ class Tab(WebCapBase):
             if self.browser.full_page_capture:
                 kwargs["captureBeyondViewport"] = True
             response = await self.request("Page.captureScreenshot", **kwargs)
-            self.webscreenshot.base64 = response["data"]
+        if "data" not in response:
+            raise ChromeInternalError(
+                "No screenshot data returned from Page.captureScreenshot")
+        self.webscreenshot.base64 = response["data"]
         self.webscreenshot.title = await self.get_title()
         return self.webscreenshot
 
@@ -106,7 +109,8 @@ class Tab(WebCapBase):
 
         request_id = request.get("requestId", "")
         redirect_response = request.pop("redirectResponse", {})
-        request_obj = self.webscreenshot.get_request_obj(request_id, request_type)
+        request_obj = self.webscreenshot.get_request_obj(
+            request_id, request_type)
         if self.browser.capture_requests:
             request = request.get("request", {})
             try:
@@ -121,11 +125,13 @@ class Tab(WebCapBase):
         if request_id is None:
             request_id = response.get("requestId", "")
             if not request_id:
-                raise DevToolsProtocolError(f"No requestId found in response: {response}")
+                raise DevToolsProtocolError(
+                    f"No requestId found in response: {response}")
         if response_type is None:
             response_type = response.get("type", "").lower()
             if not response_type:
-                raise DevToolsProtocolError(f"No response type found in response: {response}")
+                raise DevToolsProtocolError(
+                    f"No response type found in response: {response}")
 
         if response_type in self.browser.ignore_types:
             # self.log.debug(f"Ignoring response type: {response_type}")
@@ -144,7 +150,8 @@ class Tab(WebCapBase):
         if str(status_code).startswith("3") and "location" in headers:
             nav_item["location"] = headers["location"]
 
-        request_obj = self.webscreenshot.get_request_obj(request_id, response_type)
+        request_obj = self.webscreenshot.get_request_obj(
+            request_id, response_type)
         # update with the latest response type (Document, Script, etc)
         request_obj["type"] = response_type
 
@@ -180,7 +187,8 @@ class Tab(WebCapBase):
             response = await self.request("Debugger.getScriptSource", scriptId=script_id)
             source = response.get("scriptSource", "")
             if source:
-                self.webscreenshot.add_javascript(source, params.get("url", None))
+                self.webscreenshot.add_javascript(
+                    source, params.get("url", None))
 
     async def navigate(self, url):
         self.webscreenshot.url = url
@@ -232,7 +240,8 @@ class Tab(WebCapBase):
             return outer_html["outerHTML"]
         except Exception as e:
             url = getattr(self.webscreenshot, "url", "")
-            self.log.error(f"Error getting DOM for {url}: {e} (available nodes: {list(nodes)})")
+            self.log.error(
+                f"Error getting DOM for {url}: {e} (available nodes: {list(nodes)})")
             return ""
 
     async def get_title(self):
@@ -267,5 +276,6 @@ class Tab(WebCapBase):
                         categories = technology.get("categories", [])
                         icon = technology.get("icon", "")
                         slug = technology.get("slug", "")
-                        technologies[name] = {"categories": categories, "icon": icon, "slug": slug}
+                        technologies[name] = {
+                            "categories": categories, "icon": icon, "slug": slug}
         return technologies
