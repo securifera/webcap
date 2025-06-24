@@ -5,7 +5,7 @@ from contextlib import suppress
 
 from webcap.base import WebCapBase
 from webcap.webscreenshot import WebScreenshot
-from webcap.errors import WebCapError, DevToolsProtocolError, ChromeInternalError
+from webcap.errors import WebCapError, DevToolsProtocolError
 
 
 class Tab(WebCapBase):
@@ -56,10 +56,14 @@ class Tab(WebCapBase):
             if self.browser.full_page_capture:
                 kwargs["captureBeyondViewport"] = True
             response = await self.request("Page.captureScreenshot", **kwargs)
-        if "data" not in response:
-            raise ChromeInternalError(
-                "No screenshot data returned from Page.captureScreenshot")
-        self.webscreenshot.base64 = response["data"]
+
+        if "error" in response:
+            error_message = response["error"]
+            if "Internal error" in error_message:
+                raise WebCapError(
+                    f"Internal error capturing screenshot: {error_message}")
+
+        self.webscreenshot.base64 = response.get("data", None)
         self.webscreenshot.title = await self.get_title()
         return self.webscreenshot
 

@@ -8,7 +8,3 @@ class DevToolsProtocolError(WebCapError):
 
 class ScreenshotDirError(WebCapError):
     pass
-
-
-class ChromeInternalError(WebCapError):
-    pass

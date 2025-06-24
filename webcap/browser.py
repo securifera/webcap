@@ -15,7 +15,7 @@ from concurrent.futures import ProcessPoolExecutor
 from webcap.tab import Tab
 from webcap import defaults
 from webcap.base import WebCapBase
-from webcap.errors import DevToolsProtocolError, WebCapError, ChromeInternalError
+from webcap.errors import DevToolsProtocolError, WebCapError
 from webcap.helpers import task_pool, repr_params  # , download_wap
 
 
@@ -127,8 +127,6 @@ class Browser(WebCapBase):
         except asyncio.TimeoutError:
             self.log.info(
                 f"URL {url} load timed out after {self.timeout} seconds")
-        except ChromeInternalError as e:
-            self.log.error(f"Error visiting {url}: {e}")
         finally:
             with suppress(Exception):
                 await tab.close()
