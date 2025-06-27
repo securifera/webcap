@@ -47,12 +47,12 @@ class Tab(WebCapBase):
             await self.request("Debugger.enable")
         # await self.request("Runtime.enable")
 
-    async def screenshot(self):
+    async def screenshot(self, quality=100):
         async with self.browser._tab_lock:
             # switch to our tab
             await self.request("Target.activateTarget", targetId=self.tab_id)
             # Capture the screenshot
-            kwargs = {"format": "png", "quality": 100}
+            kwargs = {"format": "png", "quality": quality}
             if self.browser.full_page_capture:
                 kwargs["captureBeyondViewport"] = True
             response = await self.request("Page.captureScreenshot", **kwargs)

@@ -48,6 +48,7 @@ class Browser(WebCapBase):
         proxy=None,
         timeout=defaults.timeout,
         delay=defaults.delay,
+        quality=defaults.quality,
         full_page=False,
         dom=False,
         javascript=False,
@@ -69,6 +70,7 @@ class Browser(WebCapBase):
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.proxy = proxy
         self.timeout = timeout
+        self.quality = quality
         self.delay = delay
         self.user_agent = user_agent
         self.full_page_capture = full_page
@@ -122,7 +124,7 @@ class Browser(WebCapBase):
     async def screenshot(self, url):
         try:
             tab = await self.new_tab(url)
-            await tab.screenshot()
+            await tab.screenshot(self.quality)
             return tab.webscreenshot
         except asyncio.TimeoutError:
             self.log.info(
@@ -167,7 +169,7 @@ class Browser(WebCapBase):
             method = event["method"]
 
             # TODO: intercept requests (for headers etc.)
-            # if command == "Network.setRequestInterception"
+            # if method == "Network.setRequestInterception"
 
             # distribute to session
             session_id = event.get("sessionId", None)
@@ -198,7 +200,7 @@ class Browser(WebCapBase):
                 if sessionId:
                     request["sessionId"] = sessionId
                 await self._send_request(request)
-                response = await future
+                response = await asyncio.wait_for(future, timeout=self.timeout)
                 return response
             except DevToolsProtocolError as e:
                 self.pending_requests.pop(message_id, None)
