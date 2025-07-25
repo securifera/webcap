@@ -247,8 +247,6 @@ class Tab(WebCapBase):
 
         # Detach from target before closing it
         if self.session_id:
-            self.log.debug(
-                f"Detaching from session {self.session_id}")
             with suppress(Exception):
                 # Explicitly call with sessionId as a parameter and ensure it goes to params
                 # Work around the parameter name conflict by passing sessionId explicitly to avoid binding
@@ -256,8 +254,6 @@ class Tab(WebCapBase):
 
         # Close the page/target
         if self.tab_id:
-            self.log.debug(
-                f"Closing target {self.tab_id}")
             with suppress(Exception):
                 await self.browser.request("Target.closeTarget", targetId=self.tab_id)
 
