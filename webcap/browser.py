@@ -197,8 +197,11 @@ class Browser(WebCapBase):
                         with suppress(Exception):
                             # Use explicit parameter name to avoid conflict with method's sessionId parameter
                             self.log.debug(
-                                f"Detached from orphaned session {session_id}")
+                                f"Detaching from orphaned session {session_id}")
                             await self.request("Target.detachFromTarget", sessionId=None, **{"sessionId": session_id})
+
+                        # Calling force cleanup to ensure no stale sessions remain
+                        await self.force_cleanup()
 
         else:
             self.log.error(f"Unknown message: {event}")
@@ -454,7 +457,6 @@ class Browser(WebCapBase):
 
             # Close all targets
             for target_id in targets_to_close:
-                self.log.debug(f"Aggressively closing target: {target_id}")
                 with suppress(Exception):
                     await self.request("Target.closeTarget", targetId=target_id)
 
@@ -462,12 +464,8 @@ class Browser(WebCapBase):
             self.tabs.clear()
             self.event_queues.clear()
 
-            if targets_to_close:
-                self.log.debug(
-                    f"Aggressively cleaned up {len(targets_to_close)} targets")
-
         except Exception as e:
-            self.log.debug(f"Error during aggressive cleanup: {e}")
+            self.log.debug(f"Error during forced cleanup: {e}")
 
     def cleanup(self):
         shutil.rmtree(self.temp_dir, ignore_errors=True)
