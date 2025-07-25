@@ -193,15 +193,17 @@ class Browser(WebCapBase):
                     if method not in ["Inspector.detached", "Page.frameDetached"]:
                         self.log.debug(
                             f"No handler for event {method} in session {session_id}")
+                        raise WebCapError(
+                            "Orphaned session detected. Aborting")
                         # Detach from orphaned session to stop receiving events
-                        with suppress(Exception):
-                            # Use explicit parameter name to avoid conflict with method's sessionId parameter
-                            self.log.debug(
-                                f"Detaching from orphaned session {session_id}")
-                            await self.request("Target.detachFromTarget", sessionId=None, **{"sessionId": session_id})
+                        # with suppress(Exception):
+                        #     # Use explicit parameter name to avoid conflict with method's sessionId parameter
+                        #     self.log.debug(
+                        #         f"Detaching from orphaned session {session_id}")
+                        #     await self.request("Target.detachFromTarget", sessionId=None, **{"sessionId": session_id})
 
-                        # Calling force cleanup to ensure no stale sessions remain
-                        await self.force_cleanup()
+                        # # Calling force cleanup to ensure no stale sessions remain
+                        # await self.force_cleanup()
 
         else:
             self.log.error(f"Unknown message: {event}")
@@ -354,6 +356,8 @@ class Browser(WebCapBase):
 
         except websockets.ConnectionClosed as e:
             self.log.debug(f"WebSocket connection closed: {e}")
+        except WebCapError as e:
+            raise e
         except Exception as e:
             self.log.critical(f"Error in message handler: {e}")
             import traceback
@@ -439,33 +443,34 @@ class Browser(WebCapBase):
             with suppress(Exception):
                 await tab.close()
 
-    async def force_cleanup(self):
-        """Aggressively close ALL page targets (including about:blank)"""
-        try:
-            # Get all targets using Chrome DevTools Protocol
-            response = await self.request("Target.getTargets")
-            all_targets = response.get("targetInfos", [])
+    # async def force_cleanup(self):
+    #     """Aggressively close ALL page targets (including about:blank)"""
+    #     try:
+    #         # Get all targets using Chrome DevTools Protocol
+    #         response = await self.request("Target.getTargets")
+    #         all_targets = response.get("targetInfos", [])
 
-            targets_to_close = []
-            for target in all_targets:
-                target_id = target.get("targetId", "")
-                target_type = target.get("type", "")
+    #         targets_to_close = []
+    #         for target in all_targets:
+    #             target_id = target.get("targetId", "")
+    #             target_type = target.get("type", "")
 
-                # Close ALL page targets (including about:blank for maximum cleanup)
-                if target_type == "page":
-                    targets_to_close.append(target_id)
+    #             # Close ALL page targets (including about:blank for maximum cleanup)
+    #             if target_type == "page":
+    #                 targets_to_close.append(target_id)
 
-            # Close all targets
-            for target_id in targets_to_close:
-                with suppress(Exception):
-                    await self.request("Target.closeTarget", targetId=target_id)
+    #         # Close all targets
+    #         for target_id in targets_to_close:
+    #             with suppress(Exception):
+    #                 self.log.debug(f"Closing target {target_id}")
+    #                 await self.request("Target.closeTarget", targetId=target_id)
 
-            # Clear our tracking
-            self.tabs.clear()
-            self.event_queues.clear()
+    #         # Clear our tracking
+    #         self.tabs.clear()
+    #         self.event_queues.clear()
 
-        except Exception as e:
-            self.log.debug(f"Error during forced cleanup: {e}")
+    #     except Exception as e:
+    #         self.log.debug(f"Error during forced cleanup: {e}")
 
     def cleanup(self):
         shutil.rmtree(self.temp_dir, ignore_errors=True)
