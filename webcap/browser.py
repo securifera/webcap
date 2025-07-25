@@ -196,9 +196,10 @@ class Browser(WebCapBase):
                         # Detach from orphaned session to stop receiving events
                         with suppress(Exception):
                             # Use explicit parameter name to avoid conflict with method's sessionId parameter
-                            await self.request("Target.detachFromTarget", sessionId=None, **{"sessionId": session_id})
                             self.log.debug(
                                 f"Detached from orphaned session {session_id}")
+                            await self.request("Target.detachFromTarget", sessionId=None, **{"sessionId": session_id})
+
         else:
             self.log.error(f"Unknown message: {event}")
 
