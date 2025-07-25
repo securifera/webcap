@@ -40,6 +40,10 @@ class Browser(WebCapBase):
         "--headless=new",
         "--enable-automation",
         "--ignore-certificate-errors",
+        "--disable-session-crashed-bubble",  # Don't show crash recovery
+        "--disable-infobars",                # No info bars
+        "--disable-restore-session-state",   # Don't restore previous session
+        "--disable-background-timer-throttling",  # Better for automation
         # "--site-per-process",
     ]
 
@@ -100,10 +104,6 @@ class Browser(WebCapBase):
             f"--user-data-dir={self.temp_dir}",
             f"--window-size={x},{y}",
             f"--user-agent={self.user_agent}",
-            "--disable-session-crashed-bubble",  # Don't show crash recovery
-            "--disable-infobars",                # No info bars
-            "--disable-restore-session-state",   # Don't restore previous session
-            "--disable-background-timer-throttling",  # Better for automation
         ]
         if self.proxy:
             self.chrome_flags += [f"--proxy-server={self.proxy}"]
@@ -134,7 +134,6 @@ class Browser(WebCapBase):
             yield url, webscreenshot
 
     async def screenshot(self, url):
-        tab = None
         try:
             tab = await self.new_tab(url)
             await tab.screenshot(self.image_format, self.quality)
@@ -142,12 +141,9 @@ class Browser(WebCapBase):
         except asyncio.TimeoutError:
             self.log.info(
                 f"URL {url} load timed out after {self.timeout} seconds")
-        except Exception as e:
-            self.log.error(f"Error taking screenshot of {url}: {e}")
         finally:
-            if tab is not None:
-                with suppress(Exception):
-                    await tab.close()
+            with suppress(Exception):
+                await tab.close()
 
     async def new_tab(self, url):
         tab = Tab(self)
@@ -411,6 +407,11 @@ class Browser(WebCapBase):
             with suppress(Exception):
                 await asyncio.wait_for(asyncio.gather(*close_tasks, return_exceptions=True), timeout=5.0)
 
+        # Ensure all sessions are detached (cleanup any missed ones)
+        for session_id in list(self.event_queues.keys()):
+            with suppress(Exception):
+                await self.request("Target.detachFromTarget", sessionId=session_id)
+
         # Clear the collections
         self.tabs.clear()
         self.event_queues.clear()
@@ -428,6 +429,39 @@ class Browser(WebCapBase):
             self.log.debug(f"Closing idle tab {tab.tab_id}")
             with suppress(Exception):
                 await tab.close()
+
+    async def force_cleanup(self):
+        """Aggressively close ALL page targets (including about:blank)"""
+        try:
+            # Get all targets using Chrome DevTools Protocol
+            response = await self.request("Target.getTargets")
+            all_targets = response.get("targetInfos", [])
+
+            targets_to_close = []
+            for target in all_targets:
+                target_id = target.get("targetId", "")
+                target_type = target.get("type", "")
+
+                # Close ALL page targets (including about:blank for maximum cleanup)
+                if target_type == "page":
+                    targets_to_close.append(target_id)
+
+            # Close all targets
+            for target_id in targets_to_close:
+                self.log.debug(f"Aggressively closing target: {target_id}")
+                with suppress(Exception):
+                    await self.request("Target.closeTarget", targetId=target_id)
+
+            # Clear our tracking
+            self.tabs.clear()
+            self.event_queues.clear()
+
+            if targets_to_close:
+                self.log.debug(
+                    f"Aggressively cleaned up {len(targets_to_close)} targets")
+
+        except Exception as e:
+            self.log.debug(f"Error during aggressive cleanup: {e}")
 
     def cleanup(self):
         shutil.rmtree(self.temp_dir, ignore_errors=True)

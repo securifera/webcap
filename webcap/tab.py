@@ -245,6 +245,11 @@ class Tab(WebCapBase):
         if self.session_id:
             self.browser.event_queues.pop(self.session_id, None)
 
+        # Detach from target before closing it
+        if self.session_id:
+            with suppress(Exception):
+                await self.browser.request("Target.detachFromTarget", sessionId=self.session_id)
+
         # Close the page/target
         if self.tab_id:
             with suppress(Exception):
