@@ -247,11 +247,15 @@ class Tab(WebCapBase):
 
         # Detach from target before closing it
         if self.session_id:
+            self.log.debug(
+                f"Detaching from session {self.session_id}")
             with suppress(Exception):
-                await self.browser.request("Target.detachFromTarget", sessionId=self.session_id)
+                await self.browser.request("Target.detachFromTarget", **{"sessionId": self.session_id})
 
         # Close the page/target
         if self.tab_id:
+            self.log.debug(
+                f"Closing target {self.tab_id}")
             with suppress(Exception):
                 await self.browser.request("Target.closeTarget", targetId=self.tab_id)
 
