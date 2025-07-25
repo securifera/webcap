@@ -223,18 +223,32 @@ class Tab(WebCapBase):
             await self._done_condition.wait_for(lambda: self._semaphore._value == self._initial_semaphore_value)
 
     async def close(self):
-        # Remove the tab from the browser's tabs and sessions
-        self.browser.tabs.pop(self.tab_id, None)
-        self.browser.event_queues.pop(self.session_id, None)
-        # Disable the Page domain to stop receiving events
-        # await self.request("Page.disable")
-        # Close the page
-        await self.browser.request("Target.closeTarget", targetId=self.tab_id)
+        if self._closed:
+            return
+
         self._closed = True
-        # cancel anything waiting on the queue
+
+        # Cancel the event handler task first
+        if self._event_handler_task and not self._event_handler_task.done():
+            self._event_handler_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await self._event_handler_task
+
+        # Cancel anything waiting on the queue
         for waiter in self._incoming_event_queue._getters:
             if not waiter.done():
                 waiter.set_exception(asyncio.CancelledError())
+
+        # Remove the tab from the browser's tabs and sessions
+        if self.tab_id:
+            self.browser.tabs.pop(self.tab_id, None)
+        if self.session_id:
+            self.browser.event_queues.pop(self.session_id, None)
+
+        # Close the page/target
+        if self.tab_id:
+            with suppress(Exception):
+                await self.browser.request("Target.closeTarget", targetId=self.tab_id)
 
     async def get_dom(self):
         try:

@@ -8,6 +8,8 @@ import asyncio
 import tempfile
 import subprocess
 import signal
+import uuid
+import time
 import websockets
 from pathlib import Path
 from contextlib import suppress
@@ -67,7 +69,9 @@ class Browser(WebCapBase):
         self.chrome_path = chrome_path
         self.chrome_version_regex = re.compile(r"[A-za-z][A-Za-z ]+([\d\.]+)")
         self.threads = threads
-        self.temp_dir = Path(tempfile.gettempdir()) / ".webcap"
+        # Create unique temp directory for each browser instance
+        unique_id = str(uuid.uuid4())[:8]
+        self.temp_dir = Path(tempfile.gettempdir()) / f".webcap_{unique_id}"
         self.temp_dir.mkdir(parents=True, exist_ok=True)
         self.cache_dir = Path.home() / ".webcap"
         self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -96,6 +100,10 @@ class Browser(WebCapBase):
             f"--user-data-dir={self.temp_dir}",
             f"--window-size={x},{y}",
             f"--user-agent={self.user_agent}",
+            "--disable-session-crashed-bubble",  # Don't show crash recovery
+            "--disable-infobars",                # No info bars
+            "--disable-restore-session-state",   # Don't restore previous session
+            "--disable-background-timer-throttling",  # Better for automation
         ]
         if self.proxy:
             self.chrome_flags += [f"--proxy-server={self.proxy}"]
@@ -126,6 +134,7 @@ class Browser(WebCapBase):
             yield url, webscreenshot
 
     async def screenshot(self, url):
+        tab = None
         try:
             tab = await self.new_tab(url)
             await tab.screenshot(self.image_format, self.quality)
@@ -133,9 +142,12 @@ class Browser(WebCapBase):
         except asyncio.TimeoutError:
             self.log.info(
                 f"URL {url} load timed out after {self.timeout} seconds")
+        except Exception as e:
+            self.log.error(f"Error taking screenshot of {url}: {e}")
         finally:
-            with suppress(Exception):
-                await tab.close()
+            if tab is not None:
+                with suppress(Exception):
+                    await tab.close()
 
     async def new_tab(self, url):
         tab = Tab(self)
@@ -348,6 +360,10 @@ class Browser(WebCapBase):
     async def stop(self):
         if not self._closed:
             self.log.debug("Stopping browser")
+
+            # Close all tabs first
+            await self._close_all_tabs()
+
             if self.websocket:
                 with suppress(Exception):
                     await self.websocket.close()
@@ -378,6 +394,40 @@ class Browser(WebCapBase):
                         "Browser stopped before request completed"))
 
         self._closed = True
+
+    async def _close_all_tabs(self):
+        """Close all open tabs to free up renderer processes"""
+        tabs_to_close = list(self.tabs.values())
+        self.log.debug(f"Closing {len(tabs_to_close)} tabs")
+
+        # Close all tabs concurrently
+        close_tasks = []
+        for tab in tabs_to_close:
+            task = asyncio.create_task(tab.close())
+            close_tasks.append(task)
+
+        # Wait for all tabs to close with timeout
+        if close_tasks:
+            with suppress(Exception):
+                await asyncio.wait_for(asyncio.gather(*close_tasks, return_exceptions=True), timeout=5.0)
+
+        # Clear the collections
+        self.tabs.clear()
+        self.event_queues.clear()
+
+    async def cleanup_idle_tabs(self, max_idle_time=60):
+        """Clean up tabs that have been idle for too long"""
+        current_time = time.time()
+        tabs_to_close = []
+
+        for tab in list(self.tabs.values()):
+            if hasattr(tab, '_last_active_time') and current_time - tab._last_active_time > max_idle_time:
+                tabs_to_close.append(tab)
+
+        for tab in tabs_to_close:
+            self.log.debug(f"Closing idle tab {tab.tab_id}")
+            with suppress(Exception):
+                await tab.close()
 
     def cleanup(self):
         shutil.rmtree(self.temp_dir, ignore_errors=True)
