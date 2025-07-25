@@ -196,7 +196,7 @@ class Browser(WebCapBase):
                         # Detach from orphaned session to stop receiving events
                         with suppress(Exception):
                             # Use explicit parameter name to avoid conflict with method's sessionId parameter
-                            await self.request("Target.detachFromTarget", **{"sessionId": session_id})
+                            await self.request("Target.detachFromTarget", sessionId=None, **{"sessionId": session_id})
                             self.log.debug(
                                 f"Detached from orphaned session {session_id}")
         else:
@@ -251,7 +251,6 @@ class Browser(WebCapBase):
         if self.websocket is None:
             raise WebCapError(
                 "You must call start() on the browser before making a request")
-        # self.log.debug(f"Sending request: {request}")
         await self.websocket.send(orjson.dumps(request).decode("utf-8"))
 
     async def detect_chrome_path(self):
@@ -416,7 +415,7 @@ class Browser(WebCapBase):
         # Ensure all sessions are detached (cleanup any missed ones)
         for session_id in list(self.event_queues.keys()):
             with suppress(Exception):
-                await self.request("Target.detachFromTarget", **{"sessionId": session_id})
+                await self.request("Target.detachFromTarget", sessionId=None, **{"sessionId": session_id})
 
         # Clear the collections
         self.tabs.clear()
