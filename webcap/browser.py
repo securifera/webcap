@@ -6,6 +6,8 @@ import orjson
 import shutil
 import asyncio
 import tempfile
+import subprocess
+import signal
 import websockets
 from pathlib import Path
 from contextlib import suppress
@@ -279,8 +281,10 @@ class Browser(WebCapBase):
             #     chrome_command += [f"--load-extension={wap_path}"]
             self.log.debug("Executing chrome command: " +
                            " ".join(chrome_command))
+            # Start in new process group to kill all child processes
             self.chrome_process = Popen(
-                chrome_command, stdout=PIPE, stderr=PIPE)
+                chrome_command, stdout=PIPE, stderr=PIPE,
+                preexec_fn=os.setsid if hasattr(os, 'setsid') else None)
 
         # loop until we get the chrome uri
         while self.websocket_uri is None:
@@ -349,6 +353,23 @@ class Browser(WebCapBase):
             if self.chrome_process:
                 with suppress(Exception):
                     self.chrome_process.terminate()
+                    # Wait for process to actually exit, with timeout
+                    try:
+                        await asyncio.wait_for(
+                            asyncio.create_task(asyncio.to_thread(
+                                self.chrome_process.wait)),
+                            timeout=5.0
+                        )
+                    except asyncio.TimeoutError:
+                        # Force kill if terminate didn't work
+                        self.log.warning(
+                            "Chrome process didn't terminate gracefully, force killing")
+                        self.chrome_process.kill()
+                        await asyncio.wait_for(
+                            asyncio.create_task(asyncio.to_thread(
+                                self.chrome_process.wait)),
+                            timeout=2.0
+                        )
             for future in self.pending_requests.values():
                 if not future.done():
                     future.set_exception(WebCapError(
@@ -359,7 +380,30 @@ class Browser(WebCapBase):
     def cleanup(self):
         shutil.rmtree(self.temp_dir, ignore_errors=True)
         with suppress(Exception):
-            self.chrome_process.terminate()
+            if self.chrome_process and self.chrome_process.poll() is None:
+                # Try to kill the entire process group first
+                if hasattr(os, 'killpg'):
+                    try:
+                        os.killpg(os.getpgid(
+                            self.chrome_process.pid), signal.SIGTERM)
+                        self.chrome_process.wait(timeout=5)
+                    except (subprocess.TimeoutExpired, ProcessLookupError, OSError):
+                        # Fallback to killing individual process
+                        self.chrome_process.terminate()
+                        try:
+                            self.chrome_process.wait(timeout=5)
+                        except subprocess.TimeoutExpired:
+                            # Force kill if terminate didn't work
+                            self.chrome_process.kill()
+                            self.chrome_process.wait(timeout=2)
+                else:
+                    # Windows fallback
+                    self.chrome_process.terminate()
+                    try:
+                        self.chrome_process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        self.chrome_process.kill()
+                        self.chrome_process.wait(timeout=2)
 
     async def _next_message_id(self):
         async with self._message_id_lock:
