@@ -8,4 +8,5 @@ resolution = "1440x900"
 threads = 15
 ignored_types = ["Image", "Media", "Font", "Stylesheet"]
 timeout = 10
+image_format = "png"  # png, jpeg, webp
 quality = 100

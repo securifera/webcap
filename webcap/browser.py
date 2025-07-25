@@ -51,6 +51,7 @@ class Browser(WebCapBase):
         timeout=defaults.timeout,
         delay=defaults.delay,
         quality=defaults.quality,
+        image_format=defaults.image_format,
         full_page=False,
         dom=False,
         javascript=False,
@@ -73,6 +74,7 @@ class Browser(WebCapBase):
         self.proxy = proxy
         self.timeout = timeout
         self.quality = quality
+        self.image_format = image_format
         self.delay = delay
         self.user_agent = user_agent
         self.full_page_capture = full_page
@@ -126,7 +128,7 @@ class Browser(WebCapBase):
     async def screenshot(self, url):
         try:
             tab = await self.new_tab(url)
-            await tab.screenshot(self.quality)
+            await tab.screenshot(self.image_format, self.quality)
             return tab.webscreenshot
         except asyncio.TimeoutError:
             self.log.info(

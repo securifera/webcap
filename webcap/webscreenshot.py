@@ -68,7 +68,7 @@ class WebScreenshot(WebCapBase):
     def filename(self):
         if self.url is None:
             raise ValueError("URL not yet set")
-        return sanitize_filename(self.url) + ".png"
+        return sanitize_filename(self.url) + "." + self.tab.browser.image_format
 
     async def json(self):
         # before we jsonify, wait until our tab is finished processing
@@ -115,7 +115,8 @@ class WebScreenshot(WebCapBase):
         return self._ocr_text
 
     def _get_ocr_text(self, blob):
-        result, _ = self.tab.browser.extractous.extract_bytes_to_string(bytearray(blob))
+        result, _ = self.tab.browser.extractous.extract_bytes_to_string(
+            bytearray(blob))
         return result
         return ""
 
