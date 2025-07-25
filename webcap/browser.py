@@ -193,6 +193,11 @@ class Browser(WebCapBase):
                     if method not in ["Inspector.detached", "Page.frameDetached"]:
                         self.log.debug(
                             f"No handler for event {method} in session {session_id}")
+                        # Detach from orphaned session to stop receiving events
+                        with suppress(Exception):
+                            await self.request("Target.detachFromTarget", sessionId=session_id)
+                            self.log.debug(
+                                f"Detached from orphaned session {session_id}")
         else:
             self.log.error(f"Unknown message: {event}")
 
