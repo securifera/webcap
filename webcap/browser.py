@@ -135,6 +135,7 @@ class Browser(WebCapBase):
             yield url, webscreenshot
 
     async def screenshot(self, url):
+        tab = None
         try:
             tab = await self.new_tab(url)
             await tab.screenshot(self.image_format, self.quality)
@@ -143,8 +144,9 @@ class Browser(WebCapBase):
             self.log.info(
                 f"URL {url} load timed out after {self.timeout} seconds")
         finally:
-            with suppress(Exception):
-                await tab.close()
+            if tab:
+                with suppress(Exception):
+                    await tab.close()
 
     async def new_tab(self, url):
         tab = Tab(self)
@@ -369,10 +371,28 @@ class Browser(WebCapBase):
     async def stop(self):
         if not self._closed:
             self.log.debug("Stopping browser")
+
+            # Close all tabs first
+            tab_close_tasks = []
+            for tab in list(self.tabs.values()):
+                tab_close_tasks.append(asyncio.create_task(tab.close()))
+
+            if tab_close_tasks:
+                await asyncio.gather(*tab_close_tasks, return_exceptions=True)
+
+            # Cancel message handler task
+            if self._message_handler_task and not self._message_handler_task.done():
+                self._message_handler_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await self._message_handler_task
+
+            # Close websocket
             if self.websocket:
                 with suppress(Exception):
                     await self.websocket.close()
                 self.websocket = None
+
+            # Close chrome process
             if self.chrome_process:
                 with suppress(Exception):
                     self.chrome_process.terminate()
@@ -393,10 +413,22 @@ class Browser(WebCapBase):
                                 self.chrome_process.wait)),
                             timeout=2.0
                         )
+
+            # Close process pool
+            if hasattr(self, '_process_pool') and self._process_pool:
+                self._process_pool.shutdown(wait=False)
+                self._process_pool = None
+
+            # Cancel any pending requests
             for future in self.pending_requests.values():
                 if not future.done():
                     future.set_exception(WebCapError(
                         "Browser stopped before request completed"))
+
+            # Clear collections
+            self.pending_requests.clear()
+            self.tabs.clear()
+            self.event_queues.clear()
 
         self._closed = True
 
@@ -430,6 +462,13 @@ class Browser(WebCapBase):
 
     def cleanup(self):
         shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+        # Shutdown process pool
+        with suppress(Exception):
+            if hasattr(self, '_process_pool') and self._process_pool:
+                self._process_pool.shutdown(wait=False)
+                self._process_pool = None
+
         with suppress(Exception):
             if self.chrome_process and self.chrome_process.poll() is None:
                 # Try to kill the entire process group first
@@ -501,3 +540,10 @@ class Browser(WebCapBase):
 
     def __del__(self):
         self.cleanup()
+
+    async def __aenter__(self):
+        await self.start()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.stop()

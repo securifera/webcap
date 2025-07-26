@@ -76,9 +76,16 @@ class Tab(WebCapBase):
         self._event_handler_started.set()
         while not self._closed:
             try:
-                event = await self._incoming_event_queue.get()
+                # Add timeout to prevent hanging indefinitely
+                event = await asyncio.wait_for(
+                    self._incoming_event_queue.get(),
+                    timeout=0.5
+                )
             except (RuntimeError, asyncio.CancelledError):
                 break
+            except asyncio.TimeoutError:
+                # No event received, continue loop
+                continue
             try:
                 await self.handle_event(event)
             except Exception as e:
@@ -235,7 +242,15 @@ class Tab(WebCapBase):
                 await self._event_handler_task
 
         # Cancel anything waiting on the queue
-        for waiter in self._incoming_event_queue._getters:
+        # Clear the queue to prevent memory leaks
+        while not self._incoming_event_queue.empty():
+            try:
+                self._incoming_event_queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+
+        # Cancel any waiters on the queue
+        for waiter in getattr(self._incoming_event_queue, '_getters', []):
             if not waiter.done():
                 waiter.set_exception(asyncio.CancelledError())
 
@@ -256,6 +271,10 @@ class Tab(WebCapBase):
         if self.tab_id:
             with suppress(Exception):
                 await self.browser.request("Target.closeTarget", targetId=self.tab_id)
+
+        # Clear references
+        self.session_id = None
+        self.tab_id = None
 
     async def get_dom(self):
         try:
