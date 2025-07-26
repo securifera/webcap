@@ -194,8 +194,6 @@ class Browser(WebCapBase):
                     if method not in ["Inspector.detached", "Page.frameDetached"]:
                         self.log.debug(
                             f"No handler for event {method} in session {session_id}")
-                        raise WebCapError(
-                            "Orphaned session detected. Aborting")
                         self.orphaned_session = True
                         # Detach from orphaned session to stop receiving events
                         # with suppress(Exception):
