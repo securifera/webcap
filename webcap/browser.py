@@ -392,27 +392,43 @@ class Browser(WebCapBase):
                     await self.websocket.close()
                 self.websocket = None
 
-            # Close chrome process
-            if self.chrome_process:
+            if self.chrome_process and self.chrome_process.poll() is None:
                 with suppress(Exception):
-                    self.chrome_process.terminate()
-                    # Wait for process to actually exit, with timeout
-                    try:
-                        await asyncio.wait_for(
-                            asyncio.create_task(asyncio.to_thread(
-                                self.chrome_process.wait)),
-                            timeout=5.0
-                        )
-                    except asyncio.TimeoutError:
-                        # Force kill if terminate didn't work
-                        self.log.warning(
-                            "Chrome process didn't terminate gracefully, force killing")
-                        self.chrome_process.kill()
-                        await asyncio.wait_for(
-                            asyncio.create_task(asyncio.to_thread(
-                                self.chrome_process.wait)),
-                            timeout=2.0
-                        )
+                    # Try to kill the entire process group first
+                    if hasattr(os, 'killpg'):
+                        try:
+                            os.killpg(os.getpgid(
+                                self.chrome_process.pid), signal.SIGTERM)
+                            self.chrome_process.wait(timeout=5)
+                        except (subprocess.TimeoutExpired, ProcessLookupError, OSError):
+                            # Fallback to killing individual process
+                            self.chrome_process.terminate()
+                            try:
+                                self.chrome_process.wait(timeout=5)
+                            except subprocess.TimeoutExpired:
+                                # Force kill if terminate didn't work
+                                self.chrome_process.kill()
+                                self.chrome_process.wait(timeout=2)
+                    else:
+                        # Windows fallback
+                        self.chrome_process.terminate()
+                        # Wait for process to actually exit, with timeout
+                        try:
+                            await asyncio.wait_for(
+                                asyncio.create_task(asyncio.to_thread(
+                                    self.chrome_process.wait)),
+                                timeout=5.0
+                            )
+                        except asyncio.TimeoutError:
+                            # Force kill if terminate didn't work
+                            self.log.warning(
+                                "Chrome process didn't terminate gracefully, force killing")
+                            self.chrome_process.kill()
+                            await asyncio.wait_for(
+                                asyncio.create_task(asyncio.to_thread(
+                                    self.chrome_process.wait)),
+                                timeout=2.0
+                            )
 
             # Close process pool
             if hasattr(self, '_process_pool') and self._process_pool:
@@ -461,14 +477,13 @@ class Browser(WebCapBase):
             self.log.debug(f"Error during forced cleanup: {e}")
 
     def cleanup(self):
-        shutil.rmtree(self.temp_dir, ignore_errors=True)
-
-        # Shutdown process pool
+        # First, shutdown process pool
         with suppress(Exception):
             if hasattr(self, '_process_pool') and self._process_pool:
                 self._process_pool.shutdown(wait=False)
                 self._process_pool = None
 
+        # Next, kill Chrome process and wait for it to fully exit
         with suppress(Exception):
             if self.chrome_process and self.chrome_process.poll() is None:
                 # Try to kill the entire process group first
@@ -495,6 +510,20 @@ class Browser(WebCapBase):
                         self.chrome_process.kill()
                         self.chrome_process.wait(timeout=2)
 
+        # Finally, clean up temp directory after Chrome is fully stopped
+        # Add a small delay to ensure file handles are released
+        try:
+            import time
+            time.sleep(0.5)  # Give Chrome time to release file handles
+            shutil.rmtree(self.temp_dir, ignore_errors=True)
+        except Exception:
+            # If temp directory cleanup still fails, try again with more aggressive approach
+            try:
+                time.sleep(1.0)
+                shutil.rmtree(self.temp_dir, ignore_errors=True)
+            except Exception:
+                pass  # Give up gracefully
+
     async def _next_message_id(self):
         async with self._message_id_lock:
             message_id = int(self._current_message_id)
@@ -508,35 +537,6 @@ class Browser(WebCapBase):
 
             self._extractous = extractous.Extractor()
         return self._extractous
-
-    # async def get_wap_session(self):
-    #     # wait for chrome extension to come online (100 iterations == 10 seconds)
-    #     wap_target_id = None
-    #     async with httpx.AsyncClient() as client:
-    #         for i in range(100):
-    #             response = await client.get("http://127.0.0.1:9222/json")
-    #             targets = response.json()
-    #             for target in targets[::-1]:
-    #                 target_type = target.get("type", "")
-    #                 target_url = target.get("url", "")
-    #                 target_id = target.get("id", "")
-    #                 if target_type == "service_worker" and target_url.startswith("chrome-extension://") and target_id:
-    #                     wap_target_id = target_id
-    #                     break
-    #             await asyncio.sleep(0.1)
-    #     if wap_target_id is None:
-    #         raise WebCapError("Failed to find WAP extension target")
-    #     # attach to the target
-    #     for i in range(100):
-    #         try:
-    #             wap_response = await self.request("Target.attachToTarget", targetId=wap_target_id, flatten=True)
-    #             self.wap_session_id = wap_response.get("sessionId", None)
-    #         except DevToolsProtocolError:
-    #             await asyncio.sleep(0.1)
-    #             continue
-    #     if self.wap_session_id is not None:
-    #         return self.wap_session_id
-    #     raise WebCapError("Timed out waiting for chrome extension to load:")
 
     def __del__(self):
         self.cleanup()
