@@ -254,23 +254,35 @@ class Tab(WebCapBase):
             if not waiter.done():
                 waiter.set_exception(asyncio.CancelledError())
 
-        # Remove the tab from the browser's tabs and sessions
-        if self.tab_id:
-            self.browser.tabs.pop(self.tab_id, None)
-        if self.session_id:
-            self.browser.event_queues.pop(self.session_id, None)
-
-        # Detach from target before closing it
-        if self.session_id:
+        # Detach from target FIRST so Chrome stops sending us events for this
+        # session. Anything Chrome had already enqueued before processing the
+        # detach will still arrive — those are handled via the browser's
+        # recently-closed session TTL below.
+        session_id = self.session_id
+        tab_id = self.tab_id
+        if session_id:
+            # Mark before detaching so any racing event between detach and the
+            # queue pop is treated as benign post-close noise, not an orphan.
+            self.browser._mark_session_closed(session_id)
             with suppress(Exception):
-                # Explicitly call with sessionId as a parameter and ensure it goes to params
-                # Work around the parameter name conflict by passing sessionId explicitly to avoid binding
-                await self.browser.request("Target.detachFromTarget", sessionId=None, **{"sessionId": self.session_id})
+                # Explicit kwargs dict avoids collision with the sessionId
+                # parameter the wrapper uses for routing.
+                await self.browser.request(
+                    "Target.detachFromTarget", sessionId=None,
+                    **{"sessionId": session_id})
 
         # Close the page/target
-        if self.tab_id:
+        if tab_id:
             with suppress(Exception):
-                await self.browser.request("Target.closeTarget", targetId=self.tab_id)
+                await self.browser.request("Target.closeTarget", targetId=tab_id)
+
+        # Now remove the tab/session from the browser's bookkeeping. Any event
+        # arriving for session_id after this point hits the recently-closed
+        # TTL path and is dropped silently.
+        if tab_id:
+            self.browser.tabs.pop(tab_id, None)
+        if session_id:
+            self.browser.event_queues.pop(session_id, None)
 
         # Clear references
         self.session_id = None

@@ -16,11 +16,49 @@ from contextlib import suppress
 from subprocess import Popen, PIPE
 from concurrent.futures import ProcessPoolExecutor
 
+from collections import OrderedDict
+
 from webcap.tab import Tab
 from webcap import defaults
 from webcap.base import WebCapBase
 from webcap.errors import DevToolsProtocolError, WebCapError
 from webcap.helpers import task_pool, repr_params  # , download_wap
+
+
+# Methods Chrome commonly emits for a session *after* we have detached/closed
+# the tab. These are benign post-close races, not real orphans — receiving them
+# should not flag the browser for restart.
+_BENIGN_POST_CLOSE_METHODS = frozenset({
+    "Inspector.detached",
+    "Page.frameDetached",
+    "Page.frameStoppedLoading",
+    "Page.lifecycleEvent",
+    "Page.loadEventFired",
+    "Page.domContentEventFired",
+    "Page.frameNavigated",
+    "Page.navigatedWithinDocument",
+    "Network.dataReceived",
+    "Network.loadingFinished",
+    "Network.loadingFailed",
+    "Network.responseReceived",
+    "Network.responseReceivedExtraInfo",
+    "Network.requestWillBeSent",
+    "Network.requestWillBeSentExtraInfo",
+    "Network.requestServedFromCache",
+    "Network.resourceChangedPriority",
+    "Target.targetDestroyed",
+    "Target.targetInfoChanged",
+    "Runtime.executionContextCreated",
+    "Runtime.executionContextDestroyed",
+    "Runtime.executionContextsCleared",
+})
+
+# How long to remember recently-closed session IDs. Within this window, events
+# arriving for those sessions are silently dropped instead of flagging the
+# browser as orphaned.
+_RECENTLY_CLOSED_TTL = 10.0
+# Hard cap to keep memory bounded in case TTL pruning lags.
+_RECENTLY_CLOSED_MAX = 1024
 
 
 class Browser(WebCapBase):
@@ -44,6 +82,12 @@ class Browser(WebCapBase):
         "--disable-infobars",                # No info bars
         "--disable-restore-session-state",   # Don't restore previous session
         "--disable-background-timer-throttling",  # Better for automation
+        # Avoid the gnome-keyring / libsecret "Unlock login keyring" popup
+        # when running headed on Linux. Chrome's default is to try to store
+        # credentials in the system keyring; --password-store=basic uses an
+        # in-process store and --use-mock-keychain bypasses macOS Keychain.
+        "--password-store=basic",
+        "--use-mock-keychain",
         # "--site-per-process",
     ]
 
@@ -129,6 +173,13 @@ class Browser(WebCapBase):
 
         self._process_pool = ProcessPoolExecutor()
         self.orphaned_session = False
+        # session_id -> timestamp when the tab was closed. Used to silently
+        # ignore Chrome's post-close event tail without flagging an orphan.
+        self._recently_closed_sessions: "OrderedDict[str, float]" = OrderedDict()
+        # cleanup() runs from both atexit and __del__ and may also be reached
+        # after an explicit stop(). This flag keeps it idempotent so we don't
+        # double-kill Chrome or re-wipe an already-deleted temp dir.
+        self._cleaned_up = False
 
     async def screenshot_urls(self, urls):
         async for url, webscreenshot in task_pool(self.screenshot, urls, threads=self.threads):
@@ -193,19 +244,22 @@ class Browser(WebCapBase):
                     event_queue = self.event_queues[session_id]
                     await event_queue.put(event)
                 except KeyError:
-                    if method not in ["Inspector.detached", "Page.frameDetached"]:
+                    # Three reasons we may not have a queue for this session:
+                    #   1. We just closed the tab and Chrome is flushing its
+                    #      buffered events (benign — silently drop).
+                    #   2. The event method is one Chrome routinely emits
+                    #      around teardown (also benign).
+                    #   3. Something is genuinely wrong — flag as orphaned.
+                    if self._is_recently_closed(session_id):
+                        self.log.debug(
+                            f"Ignoring post-close event {method} for session {session_id}")
+                    elif method in _BENIGN_POST_CLOSE_METHODS:
+                        self.log.debug(
+                            f"Ignoring benign event {method} for unknown session {session_id}")
+                    else:
                         self.log.debug(
                             f"No handler for event {method} in session {session_id}")
                         self.orphaned_session = True
-                        # Detach from orphaned session to stop receiving events
-                        # with suppress(Exception):
-                        #     # Use explicit parameter name to avoid conflict with method's sessionId parameter
-                        #     self.log.debug(
-                        #         f"Detaching from orphaned session {session_id}")
-                        #     await self.request("Target.detachFromTarget", sessionId=None, **{"sessionId": session_id})
-
-                        # # Calling force cleanup to ensure no stale sessions remain
-                        # await self.force_cleanup()
 
         else:
             self.log.error(f"Unknown message: {event}")
@@ -477,6 +531,12 @@ class Browser(WebCapBase):
             self.log.debug(f"Error during forced cleanup: {e}")
 
     def cleanup(self):
+        # Idempotent: atexit, __del__, and explicit stop() can all reach here.
+        # Don't double-kill Chrome or wipe an already-deleted temp dir.
+        if getattr(self, "_cleaned_up", False):
+            return
+        self._cleaned_up = True
+
         # First, shutdown process pool
         with suppress(Exception):
             if hasattr(self, '_process_pool') and self._process_pool:
@@ -523,6 +583,25 @@ class Browser(WebCapBase):
                 shutil.rmtree(self.temp_dir, ignore_errors=True)
             except Exception:
                 pass  # Give up gracefully
+
+    def _mark_session_closed(self, session_id):
+        """Remember a session_id so its post-close event tail is ignored."""
+        if not session_id:
+            return
+        self._recently_closed_sessions[session_id] = time.time()
+        # Bound the dict — drop oldest entries past the cap.
+        while len(self._recently_closed_sessions) > _RECENTLY_CLOSED_MAX:
+            self._recently_closed_sessions.popitem(last=False)
+
+    def _is_recently_closed(self, session_id):
+        """True if session_id was closed within the TTL window."""
+        ts = self._recently_closed_sessions.get(session_id)
+        if ts is None:
+            return False
+        if (time.time() - ts) > _RECENTLY_CLOSED_TTL:
+            self._recently_closed_sessions.pop(session_id, None)
+            return False
+        return True
 
     async def _next_message_id(self):
         async with self._message_id_lock:
