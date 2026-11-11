@@ -1,7 +1,9 @@
 import os
 import re
+import sys
 import httpx
 import atexit
+import ctypes
 import orjson
 import shutil
 import asyncio
@@ -11,9 +13,10 @@ import signal
 import uuid
 import time
 import websockets
+import multiprocessing
 from pathlib import Path
 from contextlib import suppress
-from subprocess import Popen, PIPE
+from subprocess import Popen, PIPE, DEVNULL
 from concurrent.futures import ProcessPoolExecutor
 
 from collections import OrderedDict
@@ -21,7 +24,7 @@ from collections import OrderedDict
 from webcap.tab import Tab
 from webcap import defaults
 from webcap.base import WebCapBase
-from webcap.errors import DevToolsProtocolError, WebCapError
+from webcap.errors import DevToolsProtocolError, WebCapError, BrowserClosedError
 from webcap.helpers import task_pool, repr_params  # , download_wap
 
 
@@ -61,6 +64,30 @@ _RECENTLY_CLOSED_TTL = 10.0
 _RECENTLY_CLOSED_MAX = 1024
 
 
+# How long to wait for Chrome to open its DevTools endpoint before giving up.
+_STARTUP_TIMEOUT = 30.0
+# How long Chrome gets to exit after SIGTERM before its process group is SIGKILLed.
+_KILL_GRACE = 5.0
+
+# libc is loaded up front so the post-fork hook below does nothing but one call.
+_libc = None
+if sys.platform.startswith("linux"):
+    with suppress(Exception):
+        _libc = ctypes.CDLL("libc.so.6", use_errno=True)
+_PR_SET_PDEATHSIG = 1
+
+
+def _die_with_parent():
+    """
+    Runs in the Chrome child between fork and exec: ask the kernel to SIGKILL
+    Chrome when the thread that launched it goes away.
+
+    Chrome runs in its own session, so without this it survives a crashed or
+    SIGKILLed parent and is left running with nothing to stop it.
+    """
+    _libc.prctl(_PR_SET_PDEATHSIG, signal.SIGKILL)
+
+
 class Browser(WebCapBase):
     possible_chrome_binaries = [
         "chromium", "chromium-browser", "chrome", "chrome-browser", "google-chrome"]
@@ -74,7 +101,11 @@ class Browser(WebCapBase):
         "--no-default-browser-check",
         "--no-first-run",
         "--deny-permission-prompts",
-        "--remote-debugging-port=9222",
+        # Port 0 == let the OS pick a free port. Chrome reports the one it got
+        # in <user-data-dir>/DevToolsActivePort. A fixed port means a second
+        # browser (or one left over from an earlier run) silently shares or
+        # steals the endpoint.
+        "--remote-debugging-port=0",
         "--headless=new",
         "--enable-automation",
         "--ignore-certificate-errors",
@@ -88,6 +119,19 @@ class Browser(WebCapBase):
         # in-process store and --use-mock-keychain bypasses macOS Keychain.
         "--password-store=basic",
         "--use-mock-keychain",
+        # /dev/shm is tiny in containers; renderers crash or hang when it fills
+        "--disable-dev-shm-usage",
+        # No background work that isn't the page we asked for
+        "--disable-background-networking",
+        "--disable-component-update",
+        "--disable-sync",
+        "--disable-extensions",
+        "--disable-breakpad",
+        "--metrics-recording-only",
+        # Don't deprioritise tabs that aren't in the foreground
+        "--disable-renderer-backgrounding",
+        "--disable-backgrounding-occluded-windows",
+        "--disable-hang-monitor",
         # "--site-per-process",
     ]
 
@@ -171,7 +215,12 @@ class Browser(WebCapBase):
 
         self._extractous = None
 
-        self._process_pool = ProcessPoolExecutor()
+        # created on first use; see the _process_pool property
+        self._process_pool_instance = None
+        self.startup_timeout = _STARTUP_TIMEOUT
+        self.kill_grace = _KILL_GRACE
+        self.debug_port = None
+        self._chrome_log = None
         self.orphaned_session = False
         # session_id -> timestamp when the tab was closed. Used to silently
         # ignore Chrome's post-close event tail without flagging an orphan.
@@ -201,14 +250,47 @@ class Browser(WebCapBase):
 
     async def new_tab(self, url):
         tab = Tab(self)
-        await tab.create()
-        await asyncio.wait_for(tab.navigate(url), timeout=self.timeout)
+        try:
+            await tab.create()
+            await asyncio.wait_for(tab.navigate(url), timeout=self.timeout)
+        except BaseException:
+            # The caller never gets a handle to this tab, so nobody else can
+            # close it. Leaving it open leaks the page (still loading) in
+            # Chrome plus its event queue and handler task here.
+            with suppress(Exception):
+                await tab.close()
+            raise
         return tab
 
+    @property
+    def is_alive(self):
+        """
+        True while the browser can still take requests.
+
+        Goes False as soon as Chrome exits or the DevTools connection drops,
+        after which every request raises BrowserClosedError and the only way
+        forward is a new Browser.
+        """
+        if self._closed or self.websocket is None:
+            return False
+        if self.chrome_process is None or self.chrome_process.poll() is not None:
+            return False
+        return self._message_handler_task is not None and not self._message_handler_task.done()
+
     async def start(self):
-        await self.detect_chrome_path()
-        await self._start_chrome()
-        await self._start_message_handler()
+        try:
+            await self.detect_chrome_path()
+            await self._start_chrome()
+            await self._start_message_handler()
+            # Never write downloads to disk; a URL that serves a file would
+            # otherwise fill the download directory over a long scan.
+            with suppress(Exception):
+                await self.request("Browser.setDownloadBehavior", behavior="deny")
+        except BaseException:
+            # don't leave a half-started Chrome behind
+            with suppress(Exception):
+                await self.stop()
+            raise
 
         # wap_session_id = await self.get_wap_session()
 
@@ -218,17 +300,17 @@ class Browser(WebCapBase):
     async def handle_event(self, event):
         # Handle response to a specific request
         if "id" in event:
-            message_id = event["id"]
-            if message_id in self.pending_requests:
-                future = self.pending_requests[message_id]
+            future = self.pending_requests.pop(event["id"], None)
+            # The future is gone or already done when the caller timed out or
+            # was cancelled before Chrome answered. Chrome still answers (often
+            # with an error, once the tab is closed) and that must be a no-op.
+            if future is not None and not future.done():
                 if "error" in event:
                     error = event["error"]
                     msg = f"{error}"
                     future.set_exception(DevToolsProtocolError(msg))
                 else:
-                    with suppress(Exception):
-                        future.set_result(event.get("result", {}))
-                del self.pending_requests[message_id]
+                    future.set_result(event.get("result", {}))
 
         # Handle browser events
         elif "method" in event:
@@ -283,12 +365,14 @@ class Browser(WebCapBase):
                 response = await asyncio.wait_for(future, timeout=self.timeout)
                 return response
             except DevToolsProtocolError as e:
-                self.pending_requests.pop(message_id, None)
                 error = DevToolsProtocolError(
                     f"Error sending command: {command}({repr_params(params)}): {e}")
                 self.log.info(error)
                 await asyncio.sleep(retry_delay)
                 retry_delay *= 2
+            finally:
+                # also covers timeouts and cancellation
+                self.pending_requests.pop(message_id, None)
         self.log.debug(
             f"Error sending command: {command}({repr_params(params)}): {error}")
         return {"success": False, "error": str(error)}
@@ -310,10 +394,15 @@ class Browser(WebCapBase):
         return request
 
     async def _send_request(self, request):
+        if self._closed:
+            raise BrowserClosedError("The browser has stopped")
         if self.websocket is None:
             raise WebCapError(
                 "You must call start() on the browser before making a request")
-        await self.websocket.send(orjson.dumps(request).decode("utf-8"))
+        try:
+            await self.websocket.send(orjson.dumps(request).decode("utf-8"))
+        except websockets.ConnectionClosed as e:
+            raise BrowserClosedError(f"Lost connection to the browser: {e}") from e
 
     async def detect_chrome_path(self):
         # enumerate chrome path
@@ -349,6 +438,8 @@ class Browser(WebCapBase):
         # download wap
         # wap_path = await download_wap(self.version, self.cache_dir)
 
+        deadline = time.monotonic() + self.startup_timeout
+
         # start chrome process
         if self.chrome_process is None:
             chrome_command = [
@@ -358,38 +449,62 @@ class Browser(WebCapBase):
             #     chrome_command += [f"--load-extension={wap_path}"]
             self.log.debug("Executing chrome command: " +
                            " ".join(chrome_command))
-            # Start in new process group to kill all child processes
+            # Chrome's output goes to a file, never a pipe: nothing reads a
+            # pipe here, so Chrome would block for good once it filled.
+            self._chrome_log = open(self.temp_dir / "chrome_stderr.log", "wb")
             self.chrome_process = Popen(
-                chrome_command, stdout=PIPE, stderr=PIPE,
-                preexec_fn=os.setsid if hasattr(os, 'setsid') else None)
+                chrome_command, stdin=DEVNULL, stdout=DEVNULL, stderr=self._chrome_log,
+                # own session/process group, so the whole tree can be killed
+                start_new_session=True,
+                preexec_fn=_die_with_parent if _libc is not None else None)
 
-        # loop until we get the chrome uri
-        while self.websocket_uri is None:
-            # if chrome process has exited, raise an exception
+        # wait for chrome to report the port it is listening on
+        port_file = self.temp_dir / "DevToolsActivePort"
+        while True:
             return_code = self.chrome_process.poll()
-            if return_code is not None and return_code != 0:
-                raise Exception(
-                    f"Chrome process exited with code {return_code}\n{self.chrome_process.stderr.read().decode()}"
+            if return_code is not None:
+                raise WebCapError(
+                    f"Chrome process exited with code {return_code} before DevTools was ready\n{self._chrome_log_tail()}"
                 )
-            try:
-                async with httpx.AsyncClient() as client:
-                    response = await client.get("http://127.0.0.1:9222/json/version")
-                    self.websocket_uri = response.json()[
-                        "webSocketDebuggerUrl"]
-            except Exception as e:
-                self.log.info(f"Error getting Chrome URI: {e}, retrying...")
-                await asyncio.sleep(0.1)
+            lines = []
+            with suppress(OSError):
+                lines = port_file.read_text().split()
+            if len(lines) >= 2 and lines[0].isdigit():
+                break
+            if time.monotonic() > deadline:
+                raise WebCapError(
+                    f"Chrome did not open its DevTools port within {self.startup_timeout} seconds\n{self._chrome_log_tail()}"
+                )
+            await asyncio.sleep(0.1)
+
+        self.debug_port = int(lines[0])
+        self.websocket_uri = f"ws://127.0.0.1:{self.debug_port}{lines[1]}"
 
         # connect to chrome
-        self.websocket = await websockets.connect(self.websocket_uri, max_size=500_000_000)
+        try:
+            self.websocket = await asyncio.wait_for(
+                websockets.connect(self.websocket_uri, max_size=500_000_000),
+                timeout=max(deadline - time.monotonic(), 1),
+            )
+        except asyncio.TimeoutError:
+            raise WebCapError(f"Timed out connecting to Chrome DevTools at {self.websocket_uri}")
 
         # enumerate supported CDP commands
         await self._enum_commands()
 
+    def _chrome_log_tail(self, max_bytes=4096):
+        """The last few KB of Chrome's stderr, for error messages"""
+        with suppress(Exception):
+            with open(self.temp_dir / "chrome_stderr.log", "rb") as f:
+                f.seek(0, os.SEEK_END)
+                f.seek(max(f.tell() - max_bytes, 0))
+                return f.read().decode(errors="replace")
+        return ""
+
     async def _enum_commands(self):
         # get supported CDP commands
-        async with httpx.AsyncClient() as client:
-            self._protocol = (await client.get("http://127.0.0.1:9222/json/protocol")).json()
+        async with httpx.AsyncClient(timeout=self.startup_timeout) as client:
+            self._protocol = (await client.get(f"http://127.0.0.1:{self.debug_port}/json/protocol")).json()
             self._commands = {}
             for domain in self._protocol["domains"]:
                 domain_name = domain["domain"]
@@ -406,9 +521,13 @@ class Browser(WebCapBase):
         try:
             while self.websocket and not self._closed:
                 message = await self.websocket.recv()
-                response = orjson.loads(message)
-                # self.log.debug(f"Got message: {response}")
-                await self.handle_event(response)
+                try:
+                    response = orjson.loads(message)
+                    # self.log.debug(f"Got message: {response}")
+                    await self.handle_event(response)
+                except Exception as e:
+                    # one bad message must not take the whole connection down
+                    self.log.error(f"Error handling message from browser: {e}")
 
         except websockets.ConnectionClosed as e:
             self.log.debug(f"WebSocket connection closed: {e}")
@@ -423,103 +542,76 @@ class Browser(WebCapBase):
             await self.stop()
 
     async def stop(self):
-        if not self._closed:
-            self.log.debug("Stopping browser")
-
-            # Close all tabs first
-            tab_close_tasks = []
-            for tab in list(self.tabs.values()):
-                tab_close_tasks.append(asyncio.create_task(tab.close()))
-
-            if tab_close_tasks:
-                await asyncio.gather(*tab_close_tasks, return_exceptions=True)
-
-            # Cancel message handler task
-            if self._message_handler_task and not self._message_handler_task.done():
-                self._message_handler_task.cancel()
-                with suppress(asyncio.CancelledError):
-                    await self._message_handler_task
-
-            # Close websocket
-            if self.websocket:
-                with suppress(Exception):
-                    await self.websocket.close()
-                self.websocket = None
-
-            if self.chrome_process and self.chrome_process.poll() is None:
-                with suppress(Exception):
-                    # Try to kill the entire process group first
-                    if hasattr(os, 'killpg'):
-                        try:
-                            os.killpg(os.getpgid(
-                                self.chrome_process.pid), signal.SIGTERM)
-                            self.chrome_process.wait(timeout=5)
-                        except (subprocess.TimeoutExpired, ProcessLookupError, OSError):
-                            # Fallback to killing individual process
-                            self.chrome_process.terminate()
-                            try:
-                                self.chrome_process.wait(timeout=5)
-                            except subprocess.TimeoutExpired:
-                                # Force kill if terminate didn't work
-                                self.chrome_process.kill()
-                                self.chrome_process.wait(timeout=2)
-                    else:
-                        # Windows fallback
-                        self.chrome_process.terminate()
-                        # Wait for process to actually exit, with timeout
-                        try:
-                            await asyncio.wait_for(
-                                asyncio.create_task(asyncio.to_thread(
-                                    self.chrome_process.wait)),
-                                timeout=5.0
-                            )
-                        except asyncio.TimeoutError:
-                            # Force kill if terminate didn't work
-                            self.log.warning(
-                                "Chrome process didn't terminate gracefully, force killing")
-                            self.chrome_process.kill()
-                            await asyncio.wait_for(
-                                asyncio.create_task(asyncio.to_thread(
-                                    self.chrome_process.wait)),
-                                timeout=2.0
-                            )
-
-            # Close process pool
-            if hasattr(self, '_process_pool') and self._process_pool:
-                self._process_pool.shutdown(wait=False)
-                self._process_pool = None
-
-            # Cancel any pending requests
-            for future in self.pending_requests.values():
-                if not future.done():
-                    future.set_exception(WebCapError(
-                        "Browser stopped before request completed"))
-
-            # Clear collections
-            self.pending_requests.clear()
-            self.tabs.clear()
-            self.event_queues.clear()
-
+        if self._closed:
+            return
+        # Set first: stop() can be re-entered (the message handler calls it
+        # when the connection drops), and it makes every request from here on
+        # fail fast instead of waiting on a browser that is going away.
         self._closed = True
+        self.log.debug("Stopping browser")
+
+        # Forget all tabs. Chrome is about to be killed, so this only cleans
+        # up our side (event handler tasks, queues).
+        for tab in list(self.tabs.values()):
+            with suppress(Exception):
+                await tab.close()
+
+        # Cancel message handler task (unless that's who is calling us)
+        handler = self._message_handler_task
+        if handler and not handler.done() and handler is not asyncio.current_task():
+            handler.cancel()
+            with suppress(asyncio.CancelledError, Exception):
+                await handler
+
+        # Close websocket. Bounded, because a wedged Chrome never completes
+        # the closing handshake.
+        websocket, self.websocket = self.websocket, None
+        if websocket:
+            with suppress(Exception):
+                await asyncio.wait_for(websocket.close(), timeout=2)
+
+        # Fail any requests still waiting on a reply
+        for future in self.pending_requests.values():
+            if not future.done():
+                future.set_exception(BrowserClosedError(
+                    "Browser stopped before request completed"))
+
+        # Clear collections
+        self.pending_requests.clear()
+        self.tabs.clear()
+        self.event_queues.clear()
+
+        # Kill Chrome and delete its profile. This blocks while Chrome exits,
+        # so keep it off the event loop.
+        await asyncio.to_thread(self.cleanup)
 
     async def force_target_cleanup(self):
-        """Aggressively close ALL page targets (including about:blank)"""
+        """
+        Close every page in the browser, tracked or not, leaving one blank page.
+
+        The blank page matters: a Chrome with no pages left can exit, which
+        would turn a cheap cleanup into a dead browser.
+        """
         try:
+            # tabs we know about: close them properly so their handler tasks
+            # and event queues go away too
+            for tab in list(self.tabs.values()):
+                with suppress(Exception):
+                    await tab.close()
+
             # Get all targets using Chrome DevTools Protocol
             response = await self.request("Target.getTargets")
-            all_targets = response.get("targetInfos", [])
+            pages = [t.get("targetId", "") for t in response.get("targetInfos", []) if t.get("type", "") == "page"]
 
-            targets_to_close = []
-            for target in all_targets:
-                target_id = target.get("targetId", "")
-                target_type = target.get("type", "")
+            # open the page that stays, before closing anything
+            keeper = (await self.request("Target.createTarget", url="about:blank")).get("targetId")
+            if keeper is None and pages:
+                # couldn't open one, so spare an existing page instead
+                keeper = pages[0]
 
-                # Close ALL page targets (including about:blank for maximum cleanup)
-                if target_type == "page":
-                    targets_to_close.append(target_id)
-
-            # Close all targets
-            for target_id in targets_to_close:
+            for target_id in pages:
+                if target_id == keeper:
+                    continue
                 with suppress(Exception):
                     self.log.debug(f"Closing target {target_id}")
                     await self.request("Target.closeTarget", targetId=target_id)
@@ -527,62 +619,80 @@ class Browser(WebCapBase):
             # Reset flag
             self.orphaned_session = False
 
+        except BrowserClosedError:
+            raise
         except Exception as e:
             self.log.debug(f"Error during forced cleanup: {e}")
 
+    def _signal_chrome(self, sig):
+        """Send a signal to Chrome's whole process group"""
+        with suppress(OSError):
+            if hasattr(os, "killpg"):
+                # Chrome is its own session leader, so its pid is the group id
+                os.killpg(self.chrome_process.pid, sig)
+            elif sig == signal.SIGTERM:
+                self.chrome_process.terminate()
+            else:
+                self.chrome_process.kill()
+
+    def _kill_chrome(self):
+        """Stop Chrome and everything it spawned. Blocks until it is gone."""
+        process = self.chrome_process
+        if process is None:
+            return
+        if process.poll() is None:
+            self._signal_chrome(signal.SIGTERM)
+            with suppress(subprocess.TimeoutExpired):
+                process.wait(timeout=self.kill_grace)
+        # Unconditional: catches a Chrome that ignored SIGTERM as well as
+        # helper processes that outlived the main one.
+        self._signal_chrome(getattr(signal, "SIGKILL", signal.SIGTERM))
+        with suppress(subprocess.TimeoutExpired):
+            process.wait(timeout=5)
+
     def cleanup(self):
-        # Idempotent: atexit, __del__, and explicit stop() can all reach here.
-        # Don't double-kill Chrome or wipe an already-deleted temp dir.
+        """
+        Synchronous last-resort teardown: kill Chrome and delete its profile.
+
+        stop() ends here, and so do atexit and __del__ for a browser that was
+        never stopped. Idempotent.
+        """
         if getattr(self, "_cleaned_up", False):
             return
         self._cleaned_up = True
+        self._closed = True
+
+        # this browser no longer needs to be kept alive until interpreter exit
+        with suppress(Exception):
+            atexit.unregister(self.cleanup)
 
         # First, shutdown process pool
         with suppress(Exception):
-            if hasattr(self, '_process_pool') and self._process_pool:
-                self._process_pool.shutdown(wait=False)
-                self._process_pool = None
+            if self._process_pool_instance is not None:
+                self._process_pool_instance.shutdown(wait=False)
+                self._process_pool_instance = None
 
-        # Next, kill Chrome process and wait for it to fully exit
+        # Next, kill Chrome and wait for it to fully exit
         with suppress(Exception):
-            if self.chrome_process and self.chrome_process.poll() is None:
-                # Try to kill the entire process group first
-                if hasattr(os, 'killpg'):
-                    try:
-                        os.killpg(os.getpgid(
-                            self.chrome_process.pid), signal.SIGTERM)
-                        self.chrome_process.wait(timeout=5)
-                    except (subprocess.TimeoutExpired, ProcessLookupError, OSError):
-                        # Fallback to killing individual process
-                        self.chrome_process.terminate()
-                        try:
-                            self.chrome_process.wait(timeout=5)
-                        except subprocess.TimeoutExpired:
-                            # Force kill if terminate didn't work
-                            self.chrome_process.kill()
-                            self.chrome_process.wait(timeout=2)
-                else:
-                    # Windows fallback
-                    self.chrome_process.terminate()
-                    try:
-                        self.chrome_process.wait(timeout=5)
-                    except subprocess.TimeoutExpired:
-                        self.chrome_process.kill()
-                        self.chrome_process.wait(timeout=2)
+            self._kill_chrome()
 
-        # Finally, clean up temp directory after Chrome is fully stopped
-        # Add a small delay to ensure file handles are released
-        try:
-            import time
-            time.sleep(0.5)  # Give Chrome time to release file handles
+        with suppress(Exception):
+            if self._chrome_log is not None:
+                self._chrome_log.close()
+                self._chrome_log = None
+
+        # Finally, remove the profile now that nothing has it open
+        with suppress(Exception):
             shutil.rmtree(self.temp_dir, ignore_errors=True)
-        except Exception:
-            # If temp directory cleanup still fails, try again with more aggressive approach
-            try:
-                time.sleep(1.0)
-                shutil.rmtree(self.temp_dir, ignore_errors=True)
-            except Exception:
-                pass  # Give up gracefully
+
+    @property
+    def _process_pool(self):
+        # Created on first use: most callers never need it, and it uses an
+        # explicit spawn context so importing webcap doesn't have to change the
+        # host process's multiprocessing start method.
+        if self._process_pool_instance is None:
+            self._process_pool_instance = ProcessPoolExecutor(mp_context=multiprocessing.get_context("spawn"))
+        return self._process_pool_instance
 
     def _mark_session_closed(self, session_id):
         """Remember a session_id so its post-close event tail is ignored."""

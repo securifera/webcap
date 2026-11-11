@@ -118,7 +118,6 @@ class WebScreenshot(WebCapBase):
         result, _ = self.tab.browser.extractous.extract_bytes_to_string(
             bytearray(blob))
         return result
-        return ""
 
     @property
     def network_history(self):
