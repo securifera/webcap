@@ -34,10 +34,14 @@ class Tab(WebCapBase):
             if self.tab_id is None:
                 # Create a new page/tab
                 response = await self.browser.request("Target.createTarget", url="about:blank")
+                if "targetId" not in response:
+                    raise WebCapError(f"Failed to create tab: {response.get('error', response)}")
                 self.tab_id = response["targetId"]
                 self.browser.tabs[self.tab_id] = self
             if self.session_id is None:
                 response = await self.browser.request("Target.attachToTarget", targetId=self.tab_id, flatten=True)
+                if "sessionId" not in response:
+                    raise WebCapError(f"Failed to attach to tab: {response.get('error', response)}")
                 self.session_id = response["sessionId"]
                 self.browser.event_queues[self.session_id] = self._incoming_event_queue
         # Enable the Page domain to receive events
@@ -57,13 +61,13 @@ class Tab(WebCapBase):
                 kwargs["captureBeyondViewport"] = True
             response = await self.request("Page.captureScreenshot", **kwargs)
 
-        if "error" in response:
-            error_message = response["error"]
-            if "Internal error" in error_message:
-                raise WebCapError(
-                    f"Internal error capturing screenshot: {error_message}")
+        # A failed capture has no image. Raise rather than hand back a
+        # screenshot object whose .blob blows up later.
+        if "error" in response or "data" not in response:
+            raise WebCapError(
+                f"Error capturing screenshot: {response.get('error', 'no image data returned')}")
 
-        self.webscreenshot.base64 = response.get("data", None)
+        self.webscreenshot.base64 = response["data"]
         self.webscreenshot.title = await self.get_title()
         return self.webscreenshot
 
@@ -102,6 +106,11 @@ class Tab(WebCapBase):
             # page is finished loading
             if event_method == "Page.loadEventFired":
                 self._page_loaded = True
+            # alert()/confirm()/prompt()/beforeunload: the page is frozen until
+            # somebody answers, and nothing else will
+            elif event_method == "Page.javascriptDialogOpening":
+                with suppress(Exception):
+                    await self.request("Page.handleJavaScriptDialog", accept=True)
             # network request
             elif event_method == "Network.requestWillBeSent":
                 await self.add_request(params)
@@ -189,7 +198,7 @@ class Tab(WebCapBase):
             except KeyError:
                 request_obj["responses"] = [history_item]
 
-        if response_type == "document" and not "":
+        if response_type == "document":
             self.webscreenshot.navigation_history.append(nav_item)
 
     async def add_javascript(self, params):
@@ -254,24 +263,17 @@ class Tab(WebCapBase):
             if not waiter.done():
                 waiter.set_exception(asyncio.CancelledError())
 
-        # Detach from target FIRST so Chrome stops sending us events for this
-        # session. Anything Chrome had already enqueued before processing the
-        # detach will still arrive — those are handled via the browser's
-        # recently-closed session TTL below.
         session_id = self.session_id
         tab_id = self.tab_id
         if session_id:
-            # Mark before detaching so any racing event between detach and the
-            # queue pop is treated as benign post-close noise, not an orphan.
+            # Mark before closing so the events Chrome had already queued for
+            # this session are treated as benign post-close noise, not an
+            # orphan. Those are handled via the browser's recently-closed
+            # session TTL.
             self.browser._mark_session_closed(session_id)
-            with suppress(Exception):
-                # Explicit kwargs dict avoids collision with the sessionId
-                # parameter the wrapper uses for routing.
-                await self.browser.request(
-                    "Target.detachFromTarget", sessionId=None,
-                    **{"sessionId": session_id})
 
-        # Close the page/target
+        # Close the page/target. This also ends the session, so there is no
+        # separate detach.
         if tab_id:
             with suppress(Exception):
                 await self.browser.request("Target.closeTarget", targetId=tab_id)
@@ -289,6 +291,7 @@ class Tab(WebCapBase):
         self.tab_id = None
 
     async def get_dom(self):
+        nodes = {}
         try:
             nodes = await self.request("DOM.getDocument")
             root_node = nodes["root"]

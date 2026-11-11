@@ -46,6 +46,9 @@ ascii_art = r""" [1;38;5;196m         ___..._[0m
 
 stdout = Console(file=sys.stdout)
 stderr = Console(file=sys.stderr)
+# Logging is configured here, for the CLI only. Importing webcap as a library
+# leaves the host application's logging alone.
+logging.basicConfig(level=logging.ERROR, format="%(name)s [%(levelname)s] %(message)s")
 log = logging.getLogger(__name__)
 
 
