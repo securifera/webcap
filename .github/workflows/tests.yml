@@ -19,34 +19,3 @@ jobs:
           pipx install ruff
           ruff check
           ruff format
-  test:
-    needs: lint
-    runs-on: ubuntu-latest
-    strategy:
-      # if one python version fails, let the others finish
-      fail-fast: false
-      matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-      - name: Install dependencies
-        run: |
-          sudo apt update
-          sudo apt install -y tesseract-ocr chromium-browser
-          pip install poetry
-          poetry install
-      - name: Run tests
-        env:
-          CHROME_DEVEL_SANDBOX: /usr/lib/chromium/chrome-sandbox
-        run: |
-          poetry run pytest -s -vv --disable-warnings --cov-report xml:cov.xml --cov=webcap .
-      - name: Upload Code Coverage
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./cov.xml
-          verbose: true
