@@ -54,7 +54,11 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    # Disabled: this is a fork, and "webcap" on PyPI belongs to the upstream
+    # project. Collectors install from this repo directly (see install.sh in
+    # reverge_collector). To re-enable, restore:
+    #   github.event_name == 'push' && github.ref == 'refs/heads/master'
+    if: false
     steps:
       - uses: actions/checkout@v4
         with:
