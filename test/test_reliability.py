@@ -216,6 +216,36 @@ async def test_force_target_cleanup_closes_strays_but_keeps_one_page(fake_chrome
 
 
 @pytest.mark.asyncio
+async def test_force_target_cleanup_leaves_tabs_in_use_alone(fake_chrome):
+    """Only strays are swept. A tab somebody is still using must survive."""
+    async with launch(fake_chrome()) as browser:
+        tab = Tab(browser)
+        await tab.create()
+        tab_id = tab.tab_id
+        await browser.request("Target.createTarget", url="http://stray.test/")
+        assert len(await page_targets(browser)) == 3
+
+        await browser.force_target_cleanup()
+
+        # the stray is gone; the tab in use and the blank page remain
+        assert sorted(await page_targets(browser)) == sorted(["initial", tab_id])
+        assert browser.tabs == {tab_id: tab}
+        # and the tab still works
+        await tab.navigate("http://ok.test/")
+        webscreenshot = await tab.screenshot()
+        assert webscreenshot.blob == b"fake"
+        await tab.close()
+
+
+@pytest.mark.asyncio
+async def test_force_target_cleanup_does_not_pile_up_blank_pages(fake_chrome):
+    async with launch(fake_chrome()) as browser:
+        for _ in range(3):
+            await browser.force_target_cleanup()
+        assert await page_targets(browser) == ["initial"]
+
+
+@pytest.mark.asyncio
 async def test_stop_kills_chrome_and_removes_profile(fake_chrome):
     async with launch(fake_chrome()) as browser:
         temp_dir = browser.temp_dir
