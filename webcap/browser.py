@@ -587,34 +587,43 @@ class Browser(WebCapBase):
 
     async def force_target_cleanup(self):
         """
-        Close every page in the browser, tracked or not, leaving one blank page.
+        Close stray pages: ones in the browser that no Tab of ours owns.
 
-        The blank page matters: a Chrome with no pages left can exit, which
-        would turn a cheap cleanup into a dead browser.
+        Strays are popups a page opened, and tabs whose close never went
+        through. Tabs that are in use are left alone (whoever opened them
+        closes them), so this is safe to call while screenshots are in flight.
+
+        One blank page is always left open. A Chrome with no pages at all can
+        exit, which would turn a cheap cleanup into a dead browser.
         """
         try:
-            # tabs we know about: close them properly so their handler tasks
-            # and event queues go away too
-            for tab in list(self.tabs.values()):
-                with suppress(Exception):
-                    await tab.close()
+            # Under the tab lock, so a tab that Chrome has created but we have
+            # not recorded yet can't be mistaken for a stray.
+            async with self._tab_lock:
+                response = await self.request("Target.getTargets")
+                strays = [
+                    t
+                    for t in response.get("targetInfos", [])
+                    if t.get("type", "") == "page" and t.get("targetId", "") not in self.tabs
+                ]
 
-            # Get all targets using Chrome DevTools Protocol
-            response = await self.request("Target.getTargets")
-            pages = [t.get("targetId", "") for t in response.get("targetInfos", []) if t.get("type", "") == "page"]
+                # the page that stays: an existing blank one, else a new one
+                keeper = next((t["targetId"] for t in strays if t.get("url", "") == "about:blank"), None)
+                if keeper is None:
+                    keeper = (await self.request("Target.createTarget", url="about:blank")).get("targetId")
 
-            # open the page that stays, before closing anything
-            keeper = (await self.request("Target.createTarget", url="about:blank")).get("targetId")
-            if keeper is None and pages:
-                # couldn't open one, so spare an existing page instead
-                keeper = pages[0]
-
-            for target_id in pages:
-                if target_id == keeper:
-                    continue
-                with suppress(Exception):
-                    self.log.debug(f"Closing target {target_id}")
-                    await self.request("Target.closeTarget", targetId=target_id)
+                for target in strays:
+                    target_id = target["targetId"]
+                    if target_id == keeper:
+                        continue
+                    if keeper is None and not self.tabs:
+                        # couldn't open a blank page and nothing else is open:
+                        # spare this one rather than close the last page
+                        keeper = target_id
+                        continue
+                    with suppress(asyncio.TimeoutError, DevToolsProtocolError):
+                        self.log.debug(f"Closing stray target {target_id}")
+                        await self.request("Target.closeTarget", targetId=target_id)
 
             # Reset flag
             self.orphaned_session = False
